@@ -67,28 +67,6 @@ export const CategoryNav = () => {
               </div>
             )}
           </div>
-
-          {/* Quick Category Navigation Links */}
-          <nav className="flex items-center gap-6 text-xs font-bold uppercase tracking-wide">
-            <Link to="/category/diecast-toys" className="hover:text-toyOrange transition-colors py-3">
-              Diecast Toys
-            </Link>
-            <Link to="/category/building-blocks-for-kids" className="hover:text-toyOrange transition-colors py-3">
-              Building Blocks
-            </Link>
-            <Link to="/category/puzzles" className="hover:text-toyOrange transition-colors py-3">
-              Puzzles
-            </Link>
-            <Link to="/category/diy-toys" className="hover:text-toyOrange transition-colors py-3">
-              DIY Toys
-            </Link>
-            <Link to="/category/role-play-toys" className="hover:text-toyOrange transition-colors py-3">
-              Role-Play Toys
-            </Link>
-            <Link to="/shop" className="hover:text-toyOrange transition-colors py-3">
-              All Products
-            </Link>
-          </nav>
         </div>
 
         {/* Affiliate Program Button */}

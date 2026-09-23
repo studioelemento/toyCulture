@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ShoppingBag, User, Menu, X, ChevronDown } from 'lucide-react';
+import { Search, ShoppingBag, User, Menu, X, ChevronDown, LogOut } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { categories } from '../../data/categories';
 
 export const MainHeader = ({ onOpenMobileMenu }) => {
@@ -9,6 +10,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
   const [selectedCategory, setSelectedCategory] = useState('0');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { totalItemsCount, subtotal, toggleCart } = useCart();
+  const { currentUser, isLoggedIn, openAuthDrawer, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleSearchSubmit = (e) => {
@@ -118,30 +120,48 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
         {/* Right Tools (Account & Cart) */}
         <div className="flex items-center gap-4 md:gap-6">
           {/* User Account */}
-          <Link
-            to="/account"
-            className="hidden sm:flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors"
-          >
-            <User size={20} className="text-toyOrange" />
-            <span>Login / Register</span>
-          </Link>
+          {isLoggedIn ? (
+            <div className="hidden sm:flex items-center gap-3">
+              <Link
+                to="/account"
+                className="flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors"
+              >
+                <div className="w-7 h-7 rounded-full bg-toyOrange/20 text-toyOrange flex items-center justify-center font-black text-xs">
+                  {currentUser?.name?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <span>{currentUser?.name || 'My Account'}</span>
+              </Link>
+              <button
+                onClick={logout}
+                className="text-gray-400 hover:text-toyRed transition-colors p-1"
+                title="Log Out"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => openAuthDrawer('login')}
+              className="hidden sm:flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors cursor-pointer"
+            >
+              <User size={20} className="text-toyOrange" />
+              <span>Login / Register</span>
+            </button>
+          )}
 
           {/* Shopping Cart Trigger */}
           <button
             onClick={toggleCart}
-            className="flex items-center gap-3 bg-toyNavy-light hover:bg-toyNavy-dark px-3 py-2 rounded-full border border-gray-700 transition-colors"
+            className="flex items-center gap-3 bg-toyOrange hover:bg-toyOrange-hover px-3 py-2 rounded-full border border-gray-700 transition-colors"
             aria-label="View Shopping Cart"
           >
-            <div className="relative">
-              <ShoppingBag size={22} className="text-toyOrange" />
-              <span className="absolute -top-2 -right-2 bg-toyOrange text-white text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow">
+            <div className="relative bg">
+              <span className="absolute -top-2 -right-2 bg-white text-toyOrange text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow">
                 {totalItemsCount}
               </span>
+              <ShoppingBag size={22} className="text-white" />
             </div>
             <div className="hidden sm:flex flex-col text-left">
-              <span className="text-[10px] text-gray-400 font-semibold uppercase leading-none">
-                Shopping Cart
-              </span>
               <span className="text-xs font-bold text-white mt-0.5">
                 ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </span>

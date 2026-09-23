@@ -5,6 +5,7 @@ import { MainHeader } from '../components/Header/MainHeader';
 import { CategoryNav } from '../components/Header/CategoryNav';
 import { MobileNavDrawer } from '../components/Header/MobileNavDrawer';
 import { CartDrawer } from '../components/Cart/CartDrawer';
+import { AuthDrawer } from '../components/Auth/AuthDrawer';
 import { Footer } from '../components/Footer/Footer';
 import { useCart } from '../context/CartContext';
 import { CheckCircle, AlertCircle } from 'lucide-react';
@@ -36,6 +37,9 @@ export const MainLayout = () => {
 
       {/* Global Slide-Over Cart Drawer */}
       <CartDrawer />
+
+      {/* Global Slide-Over Auth Drawer */}
+      <AuthDrawer />
 
       {/* Main Page Viewport */}
       <main className="flex-1">

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { X, Search, ChevronRight, User, ShoppingBag } from 'lucide-react';
+import { X, Search, ChevronRight, User, LogOut } from 'lucide-react';
 import { categories } from '../../data/categories';
+import { useAuth } from '../../context/AuthContext';
 
 export const MobileNavDrawer = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const { currentUser, isLoggedIn, openAuthDrawer, logout } = useAuth();
   const navigate = useNavigate();
 
   if (!isOpen) return null;
@@ -82,14 +84,39 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
 
         {/* Footer Account & Links */}
         <div className="p-4 border-t border-gray-100 bg-gray-50 space-y-3">
-          <Link
-            to="/account"
-            onClick={onClose}
-            className="flex items-center gap-3 bg-toyNavy text-white px-4 py-2.5 rounded-lg text-xs font-bold justify-center hover:bg-toyNavy-light transition-colors"
-          >
-            <User size={16} className="text-toyOrange" />
-            <span>Login / Register</span>
-          </Link>
+          {isLoggedIn ? (
+            <div className="flex items-center justify-between bg-toyNavy text-white px-4 py-2.5 rounded-lg">
+              <Link
+                to="/account"
+                onClick={onClose}
+                className="flex items-center gap-3 text-xs font-bold hover:text-toyOrange transition-colors flex-1"
+              >
+                <User size={16} className="text-toyOrange" />
+                <span>{currentUser?.name || 'My Account'}</span>
+              </Link>
+              <button
+                onClick={() => {
+                  logout();
+                  onClose();
+                }}
+                className="text-gray-400 hover:text-toyRed transition-colors p-1"
+                title="Log Out"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                onClose();
+                openAuthDrawer('login');
+              }}
+              className="w-full flex items-center gap-3 bg-toyNavy text-white px-4 py-2.5 rounded-lg text-xs font-bold justify-center hover:bg-toyNavy-light transition-colors"
+            >
+              <User size={16} className="text-toyOrange" />
+              <span>Login / Register</span>
+            </button>
+          )}
           <Link
             to="/affiliate-registration"
             onClick={onClose}
