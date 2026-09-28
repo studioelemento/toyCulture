@@ -4,13 +4,13 @@
 
 @layer base {
   body {
-    background-color: #FFF1E3;
-    color: #242424;
-    font-family: "Nunito Sans", sans-serif;
+    background-color: #FAF9F5;
+    color: #1A293D;
+    font-family: "Plus Jakarta Sans", "Nunito Sans", sans-serif;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: "Poppins", sans-serif;
+    font-family: "Outfit", "Plus Jakarta Sans", sans-serif;
   }
 }
 

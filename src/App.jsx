@@ -4,7 +4,8 @@ import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { MainLayout } from './layouts/MainLayout';
 import { Home } from './pages/Home';
-import { Shop } from './pages/Shop';
+import { Shopbyage } from './pages/Shopbyage';
+import { ShopbyCategory } from './pages/ShopbyCategory';
 import { Category } from './pages/Category';
 import { ProductDetails } from './pages/ProductDetails';
 import { Cart } from './pages/Cart';
@@ -22,7 +23,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Home />} />
-              <Route path="shop" element={<Shop />} />
+              <Route path="shop-by-age" element={<Shopbyage />} />
+              <Route path="shop-by-category" element={<ShopbyCategory />} />
               <Route path="category/:categorySlug" element={<Category />} />
               <Route path="product/:productSlug" element={<ProductDetails />} />
               <Route path="cart" element={<Cart />} />
