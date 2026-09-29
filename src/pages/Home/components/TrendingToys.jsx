@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ShoppingCart, Heart, ChevronLeft, ChevronRight, Star } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { useCart } from '../../../context/CartContext';
 
 export const trendingProductsData = [
   {

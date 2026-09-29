@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Gift, ShieldCheck, CreditCard, Truck, RotateCcw } from 'lucide-react';
-import { Shopbyage } from './Shopbyage';
-import { ShopbyCategory } from './ShopbyCategory';
-import { TrendingToys } from './TrendingToys';
-import { BestSeller } from './BestSeller';
-import { TopBrands } from './TopBrands';
-import { DealoftheDay } from './DealoftheDay';
-import { NewArrivals } from './NewArrivals';
-import { SubscribeNewsletter } from './SubscribeNewsletter';
 
 // Hero image asset generated to match reference
 import heroChildImage from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/hero_boy_wooden_toy_1790556482600.jpg';
 
-export const Home = () => {
+export const Hero = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
@@ -27,7 +19,7 @@ export const Home = () => {
   };
 
   return (
-    <div className="bg-[#FAF9F5] min-h-[calc(100vh-140px)] flex flex-col justify-between overflow-x-hidden selection:bg-toyOrange/20 selection:text-toyOrange">
+    <div className="w-full">
       {/* Hero Section Container */}
       <section className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 pt-6 sm:pt-8 md:pt-12 pb-6 lg:pb-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
@@ -59,7 +51,7 @@ export const Home = () => {
             {/* Search Bar */}
             <form
               onSubmit={handleSearchSubmit}
-              className="relative w-full max-w-[480px] bg-white rounded-full shadow-[0_2px_14px_rgba(0,0,0,0.04)] border border-[#E2E8F0] p-1.5 sm:p-2 pl-4 sm:pl-5 flex items-center gap-2 sm:gap-3 transition-all focus-within:border-[#F96515]/60 focus-within:shadow-[0_4px_20px_rgba(249,101,21,0.12)]"
+              className="relative w-full max-w-[480px] bg-white rounded-full shadow-[0_2px_14px_rgba(0,0,0,0.02)] border border-[#E2E8F0] p-1.5 sm:p-2 pl-4 sm:pl-5 flex items-center gap-2 sm:gap-3 transition-all focus-within:border-[#F96515]/60 focus-within:shadow-[0_4px_20px_rgba(249,101,21,0.12)]"
             >
               <Search className="w-5 h-5 text-[#94A3B8] flex-shrink-0" strokeWidth={2.2} />
               <input
@@ -262,30 +254,8 @@ export const Home = () => {
 
         </div>
       </section>
-
-      {/* Shop by Age Section */}
-      <Shopbyage />
-
-      {/* Shop by Category Section */}
-      <ShopbyCategory />
-
-      {/* Trending Toys Section */}
-      <TrendingToys />
-
-      {/* Best Sellers Section */}
-      <BestSeller />
-
-      {/* Top Brands Section */}
-      <TopBrands />
-
-      {/* Deal of the Day Section */}
-      <DealoftheDay />
-
-      {/* New Arrivals Section */}
-      <NewArrivals />
-
-      {/* Subscribe Newsletter Section */}
-      <SubscribeNewsletter />
     </div>
   );
 };
+
+export default Hero;

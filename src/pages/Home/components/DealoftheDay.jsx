@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Star, Truck, Shield, Package } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { useCart } from '../../../context/CartContext';
 
 export const dealOfTheDayProduct = {
   id: 'deal-of-the-day-lego-space',

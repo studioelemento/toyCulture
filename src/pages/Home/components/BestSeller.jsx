@@ -1,64 +1,96 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Heart, Star } from 'lucide-react';
-import { useCart } from '../context/CartContext';
+import { ArrowRight, ShoppingCart, Heart, Star, Shield, Lock, Truck, Package } from 'lucide-react';
+import { useCart } from '../../../context/CartContext';
 
-export const newArrivalsProducts = [
+export const bestSellersData = [
   {
-    id: 'new-1',
-    name: 'Remote Control Off-Road Truck',
-    slug: 'remote-control-off-road-truck',
-    brand: 'PowerCraze',
-    price: 2499,
-    badge: 'New',
-    rating: 4.6,
-    reviewsCount: 89,
+    id: 'bestseller-1',
+    name: 'Lamborghini Huracán 1:18 Diecast Model',
+    slug: 'lamborghini-huracan-1-18-diecast-model',
+    brand: 'Maisto',
+    price: 2399,
+    originalPrice: 2999,
+    discount: '-20%',
+    rating: 4.8,
+    reviewsCount: 124,
     image: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=500&q=80',
     fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/12/4.png',
     inStock: true,
   },
   {
-    id: 'new-2',
-    name: 'Creative Building Blocks Set (200 Pcs)',
-    slug: 'creative-building-blocks-set-200-pcs',
+    id: 'bestseller-2',
+    name: 'Magnetic Building Tiles 100 Pieces',
+    slug: 'magnetic-building-tiles-100-pieces',
     brand: 'ToysBox',
-    price: 1299,
-    badge: 'New',
-    rating: 4.8,
-    reviewsCount: 124,
+    price: 1699,
+    originalPrice: null,
+    discount: null,
+    rating: 4.7,
+    reviewsCount: 89,
     image: 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=500&q=80',
     fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp',
     inStock: true,
   },
   {
-    id: 'new-3',
-    name: 'Soft Teddy Bear (50 cm)',
-    slug: 'soft-teddy-bear-50-cm',
-    brand: 'Funskool',
-    price: 1499,
-    badge: 'New',
-    rating: 4.7,
-    reviewsCount: 96,
-    image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=500&q=80',
+    id: 'bestseller-3',
+    name: 'DIY Solar Powered Car',
+    slug: 'diy-solar-powered-car',
+    brand: 'Smartivity',
+    price: 899,
+    originalPrice: 1099,
+    discount: '-15%',
+    rating: 4.6,
+    reviewsCount: 56,
+    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=500&q=80',
+    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp',
+    inStock: true,
+  },
+  {
+    id: 'bestseller-4',
+    name: 'Wooden Kitchen Set for Kids',
+    slug: 'wooden-kitchen-set-for-kids',
+    brand: 'Kruzzel',
+    price: 3499,
+    originalPrice: null,
+    discount: null,
+    rating: 4.8,
+    reviewsCount: 73,
+    image: 'https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&w=500&q=80',
     fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
     inStock: true,
   },
   {
-    id: 'new-4',
-    name: 'Kids Smart Watch with GPS',
-    slug: 'kids-smart-watch-with-gps',
-    brand: 'KiddoTech',
-    price: 3999,
-    badge: 'New',
-    rating: 4.5,
-    reviewsCount: 72,
-    image: 'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp',
+    id: 'bestseller-5',
+    name: 'T-Rex Dinosaur Figure',
+    slug: 't-rex-dinosaur-figure',
+    brand: 'Schleich',
+    price: 1299,
+    originalPrice: null,
+    discount: null,
+    rating: 4.7,
+    reviewsCount: 92,
+    image: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?auto=format&fit=crop&w=500&q=80',
+    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif',
+    inStock: true,
+  },
+  {
+    id: 'bestseller-6',
+    name: 'Teddy Bear Soft Toy',
+    slug: 'teddy-bear-soft-toy',
+    brand: 'Funskool',
+    price: 999,
+    originalPrice: null,
+    discount: null,
+    rating: 4.8,
+    reviewsCount: 101,
+    image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=500&q=80',
+    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
     inStock: true,
   },
 ];
 
-export const NewArrivals = () => {
+export const BestSeller = () => {
   const { addToCart } = useCart();
   const [wishlist, setWishlist] = useState({});
 
@@ -73,19 +105,28 @@ export const NewArrivals = () => {
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12">
         
         {/* Section Header */}
-        <div className="mb-6 sm:mb-8 md:mb-10 text-left">
-          <span className="text-[11px] sm:text-xs md:text-[13px] font-bold tracking-[0.2em] text-[#55657E] uppercase font-sans block mb-1">
-            NEW ARRIVALS
-          </span>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] font-black text-[#0F243E] tracking-tight leading-tight font-title">
-            Fresh toys, <br className="block sm:hidden" />
-            <span className="text-[#F96515]">new adventures</span>
-          </h2>
+        <div className="flex flex-row items-end justify-between mb-6 sm:mb-8 md:mb-10">
+          <div className="space-y-1 sm:space-y-1.5">
+            <span className="text-[11px] sm:text-xs md:text-[13px] font-bold tracking-[0.2em] text-[#55657E] uppercase font-sans">
+              BEST SELLERS
+            </span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] font-black text-[#0F243E] tracking-tight leading-tight font-title">
+              Customer <span className="text-[#F96515]">favourites</span>
+            </h2>
+          </div>
+
+          <Link
+            to="/shop-by-category"
+            className="text-xs sm:text-sm md:text-[15px] font-bold text-[#F96515] hover:text-[#EA580C] transition-colors flex items-center gap-1 sm:gap-1.5 flex-shrink-0 cursor-pointer pb-1"
+          >
+            <span>View All</span>
+            <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+          </Link>
         </div>
 
-        {/* Desktop Layout (1440px) - 4 Columns Grid */}
-        <div className="hidden md:grid grid-cols-4 gap-4 lg:gap-6">
-          {newArrivalsProducts.map((product) => {
+        {/* Desktop Layout (1440px) - 5 Product Cards Grid */}
+        <div className="hidden md:grid grid-cols-5 gap-4 lg:gap-5 mb-10">
+          {bestSellersData.slice(0, 5).map((product) => {
             const isFav = !!wishlist[product.id];
 
             return (
@@ -93,11 +134,15 @@ export const NewArrivals = () => {
                 key={product.id}
                 className="bg-white rounded-[24px] border border-[#ECEFF2] p-4 flex flex-col justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-lg transition-all duration-300 relative group"
               >
-                {/* Top Bar: 'New' Green Badge & Wishlist Button */}
+                {/* Top: Discount Badge & Wishlist Button */}
                 <div className="flex items-center justify-between w-full mb-2">
-                  <span className="bg-[#10B981] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
-                    {product.badge}
-                  </span>
+                  {product.discount ? (
+                    <span className="bg-[#F96515] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
+                      {product.discount}
+                    </span>
+                  ) : (
+                    <span />
+                  )}
 
                   <button
                     onClick={(e) => toggleWishlist(product.id, e)}
@@ -142,7 +187,7 @@ export const NewArrivals = () => {
                     </Link>
                   </div>
 
-                  {/* Star Rating */}
+                  {/* Rating */}
                   <div className="flex items-center gap-1.5 pt-0.5">
                     <div className="flex items-center text-[#F59E0B]">
                       {[...Array(5)].map((_, i) => (
@@ -159,6 +204,11 @@ export const NewArrivals = () => {
                     <span className="text-base lg:text-lg font-black text-[#0F243E]">
                       ₹{product.price.toLocaleString('en-IN')}
                     </span>
+                    {product.originalPrice && (
+                      <span className="text-xs text-[#94A3B8] line-through font-medium">
+                        ₹{product.originalPrice.toLocaleString('en-IN')}
+                      </span>
+                    )}
                   </div>
 
                   {/* Add to Cart */}
@@ -175,9 +225,9 @@ export const NewArrivals = () => {
           })}
         </div>
 
-        {/* Mobile Layout (375px) - 2 Columns x 2 Rows Grid matching reference */}
-        <div className="grid grid-cols-2 gap-3 md:hidden">
-          {newArrivalsProducts.map((product) => {
+        {/* Mobile Layout (375px) - 2 Columns x 3 Rows Grid matching reference */}
+        <div className="grid grid-cols-2 gap-3 md:hidden mb-8">
+          {bestSellersData.map((product) => {
             const isFav = !!wishlist[product.id];
 
             return (
@@ -185,11 +235,15 @@ export const NewArrivals = () => {
                 key={product.id}
                 className="bg-white rounded-2xl border border-[#ECEFF2] p-2.5 shadow-xs flex flex-col justify-between relative group"
               >
-                {/* Badge & Wishlist */}
+                {/* Discount & Wishlist */}
                 <div className="flex items-center justify-between w-full mb-1">
-                  <span className="bg-[#10B981] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
-                    {product.badge}
-                  </span>
+                  {product.discount ? (
+                    <span className="bg-[#F96515] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                      {product.discount}
+                    </span>
+                  ) : (
+                    <span />
+                  )}
 
                   <button
                     onClick={(e) => toggleWishlist(product.id, e)}
@@ -204,7 +258,7 @@ export const NewArrivals = () => {
                   </button>
                 </div>
 
-                {/* Image */}
+                {/* Product Image */}
                 <Link
                   to={`/product/${product.slug}`}
                   className="w-full aspect-square rounded-xl bg-[#FAF9F5] p-1.5 mb-2 flex items-center justify-center overflow-hidden"
@@ -250,6 +304,11 @@ export const NewArrivals = () => {
                     <span className="text-xs font-black text-[#0F243E]">
                       ₹{product.price.toLocaleString('en-IN')}
                     </span>
+                    {product.originalPrice && (
+                      <span className="text-[9px] text-[#94A3B8] line-through">
+                        ₹{product.originalPrice.toLocaleString('en-IN')}
+                      </span>
+                    )}
                   </div>
 
                   {/* Add to Cart */}
@@ -266,9 +325,74 @@ export const NewArrivals = () => {
           })}
         </div>
 
+        {/* Guarantee & Trust Badges Feature Banner (Bottom) */}
+        <div className="hidden md:grid grid-cols-4 gap-6 bg-[#F4F7F9]/80 border border-[#E2E8F0] rounded-[24px] p-6 lg:p-7">
+          
+          {/* Item 1 */}
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
+              <Shield className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-extrabold text-[#0F243E] font-title">
+                100% Authentic
+              </h4>
+              <p className="text-xs text-[#64748B] font-medium">
+                Original products only
+              </p>
+            </div>
+          </div>
+
+          {/* Item 2 */}
+          <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
+              <Lock className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-extrabold text-[#0F243E] font-title">
+                Secure Payments
+              </h4>
+              <p className="text-xs text-[#64748B] font-medium">
+                Multiple payment options
+              </p>
+            </div>
+          </div>
+
+          {/* Item 3 */}
+          <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
+              <Truck className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-extrabold text-[#0F243E] font-title">
+                Pan-India Delivery
+              </h4>
+              <p className="text-xs text-[#64748B] font-medium">
+                Across 19,000+ pincodes
+              </p>
+            </div>
+          </div>
+
+          {/* Item 4 */}
+          <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
+              <Package className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-extrabold text-[#0F243E] font-title">
+                Easy Returns
+              </h4>
+              <p className="text-xs text-[#64748B] font-medium">
+                Hassle-free within 7 days
+              </p>
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </section>
   );
 };
 
-export default NewArrivals;
+export default BestSeller;
