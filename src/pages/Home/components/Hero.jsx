@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Gift, ShieldCheck, CreditCard, Truck, RotateCcw } from 'lucide-react';
 
-// Hero image asset generated to match reference
-import heroChildImage from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/hero_boy_wooden_toy_1790556482600.jpg';
+// Hero image asset (placeholder)
+const heroChildImage = 'https://placehold.co/600x450/FEECC8/0F243E?text=Child+Playing';
 
 export const Hero = () => {
   const [searchQuery, setSearchQuery] = useState('');

@@ -2,12 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
-// Age group images
-import age02Img from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/age_0_2_baby_1790556980448.jpg';
-import age35Img from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/age_3_5_girl_1790556999796.jpg';
-import age68Img from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/age_6_8_boy_1790557019618.jpg';
-import age912Img from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/age_9_12_stem_1790557041067.jpg';
-import age13PlusImg from 'C:/Users/amnap/.gemini/antigravity-ide/brain/2bcd030e-7b9f-4cda-a4f6-98f88df8e5bf/age_13_plus_supercar_1790557067784.jpg';
+// Age group images (placeholders)
+const age02Img = 'https://placehold.co/400x400/FDF0F0/0F243E?text=0-2+Years';
+const age35Img = 'https://placehold.co/400x400/EDF7EE/0F243E?text=3-5+Years';
+const age68Img = 'https://placehold.co/400x400/EAF3FC/0F243E?text=6-8+Years';
+const age912Img = 'https://placehold.co/400x400/F0EDFC/0F243E?text=9-12+Years';
+const age13PlusImg = 'https://placehold.co/400x400/FDF6E2/0F243E?text=13%2B+Years';
 
 export const ageGroupsData = [
   {
