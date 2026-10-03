@@ -151,7 +151,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
 
           {/* Shopping Cart Trigger */}
           <button
-            onClick={toggleCart}
+            onClick={() => navigate('/cart')}
             className="flex items-center gap-3 bg-toyOrange hover:bg-toyOrange-hover px-3 py-2 rounded-full border border-gray-700 transition-colors"
             aria-label="View Shopping Cart"
           >
