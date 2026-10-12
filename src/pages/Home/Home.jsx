@@ -35,9 +35,6 @@ export const Home = () => {
 
       {/* New Arrivals Section */}
       <NewArrivals />
-
-      {/* Subscribe Newsletter Section */}
-      <SubscribeNewsletter />
     </div>
   );
 };

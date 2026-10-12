@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import { TopNoticeBar } from '../components/Header/TopNoticeBar';
-import { MainHeader } from '../components/Header/MainHeader';
-import { CategoryNav } from '../components/Header/CategoryNav';
-import { MobileNavDrawer } from '../components/Header/MobileNavDrawer';
+import { Header } from '../components/Header/Header';
 import { CartDrawer } from '../components/Cart/CartDrawer';
 import { AuthDrawer } from '../components/Auth/AuthDrawer';
 import { Footer } from '../components/Footer/Footer';
@@ -11,7 +8,6 @@ import { useCart } from '../context/CartContext';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 
 export const MainLayout = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { toastMessage } = useCart();
 
   return (
@@ -24,16 +20,8 @@ export const MainLayout = () => {
         </div>
       )}
 
-      {/* Header Stack */}
-      <TopNoticeBar />
-      <MainHeader onOpenMobileMenu={() => setIsMobileMenuOpen(true)} />
-      <CategoryNav />
-
-      {/* Mobile Menu Drawer */}
-      <MobileNavDrawer
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-      />
+      {/* Global Header */}
+      <Header />
 
       {/* Global Slide-Over Cart Drawer */}
       <CartDrawer />
