@@ -140,13 +140,13 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => openAuthDrawer('login')}
+            <Link
+              to="/login"
               className="hidden sm:flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors cursor-pointer"
             >
               <User size={20} className="text-toyOrange" />
               <span>Login / Register</span>
-            </button>
+            </Link>
           )}
 
           {/* Shopping Cart Trigger */}

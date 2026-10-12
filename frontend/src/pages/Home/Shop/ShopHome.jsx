@@ -20,7 +20,7 @@ const makePlaceholder = (text) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-const products = [
+export const products = [
   {
     id: 1,
     name: 'Lamborghini Huracán LP 610-4',
@@ -419,7 +419,7 @@ const ShopHome = () => {
             {/* Product Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
               {products.map((product) => (
-                <div key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full">
+                <Link to={`/product/${product.id}`} key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full block">
 
                   {/* Image & Badges */}
                   <div className="relative aspect-square mb-3 md:mb-4 bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center p-3 md:p-4">
@@ -441,7 +441,10 @@ const ShopHome = () => {
                     )}
 
                     {/* Wishlist Button */}
-                    <button className="absolute top-2 right-2 md:top-3 md:right-3 w-7 h-7 md:w-8 md:h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-red-500 transition-colors z-10">
+                    <button 
+                      onClick={(e) => { e.preventDefault(); /* prevent navigation */ }}
+                      className="absolute top-2 right-2 md:top-3 md:right-3 w-7 h-7 md:w-8 md:h-8 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-red-500 transition-colors z-10"
+                    >
                       <Heart className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     </button>
 
@@ -477,14 +480,17 @@ const ShopHome = () => {
                         )}
                       </div>
 
-                      <button className="w-full bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white text-[12px] md:text-[14px] font-bold py-2 md:py-2.5 rounded-lg flex items-center justify-center gap-1.5 md:gap-2 transition-all shadow-[0_4px_12px_rgba(249,101,21,0.2)]">
+                      <button 
+                        onClick={(e) => { e.preventDefault(); /* handle add to cart without navigating */ }}
+                        className="w-full bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white text-[12px] md:text-[14px] font-bold py-2 md:py-2.5 rounded-lg flex items-center justify-center gap-1.5 md:gap-2 transition-all shadow-[0_4px_12px_rgba(249,101,21,0.2)]"
+                      >
                         <ShoppingCart className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         Add to Cart
                       </button>
                     </div>
                   </div>
 
-                </div>
+                </Link>
               ))}
             </div>
 
