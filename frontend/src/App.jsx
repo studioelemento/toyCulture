@@ -19,6 +19,7 @@ export default function App() {
       <AuthProvider>
         <Router>
           <Routes>
+            <Route path="/login" element={<Login />} />
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Home />} />
               <Route path="shop" element={<ShopHome />} />
@@ -27,7 +28,6 @@ export default function App() {
               <Route path="product/:id" element={<SingleProduct />} />
               <Route path="cart" element={<CartPage />} />
               <Route path="checkout" element={<CartCheckout />} />
-              <Route path="login" element={<Login />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
