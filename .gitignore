@@ -31,3 +31,6 @@ Thumbs.db
 # System generated
 .agents/
 .system_generated/
+
+# Deprecated / legacy backend
+backend/
