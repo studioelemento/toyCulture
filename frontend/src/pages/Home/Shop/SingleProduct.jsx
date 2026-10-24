@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { 
   ChevronRight, Heart, Star, CheckCircle2, Minus, Plus, ShoppingCart, Zap, 
   ShieldCheck, CreditCard, Truck, RotateCcw, ChevronDown, Smile, Layers, Car,
   Tag, Ruler, User
 } from 'lucide-react';
-import { products } from './ShopHome';
+// Removed static import; product will be fetched via API
 
 const SingleProduct = () => {
   const { id } = useParams();
@@ -14,15 +14,40 @@ const SingleProduct = () => {
   const [activeTab, setActiveTab] = useState('Product Highlights');
   const [openAccordion, setOpenAccordion] = useState('Product Highlights');
 
-  const product = products.find(p => p.id.toString() === id) || products[0];
+  const [product, setProduct] = useState(null);
+  const [loadingProduct, setLoadingProduct] = useState(true);
+  const [errorProduct, setErrorProduct] = useState(null);
 
-  const images = [
-    product.image,
-    product.image,
-    product.image,
-    product.image,
-    product.image
-  ];
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const res = await fetch(`/api/v1/products/${id}`);
+        if (!res.ok) throw new Error('Failed to fetch product');
+        const data = await res.json();
+        // Assuming API returns { success: true, data: {...} }
+        setProduct(data.success ? data.data : null);
+      } catch (err) {
+        setErrorProduct(err.message);
+      } finally {
+        setLoadingProduct(false);
+      }
+    };
+    fetchProduct();
+  }, [id]);
+
+  if (loadingProduct) {
+    return <div className="text-center py-20">Loading product...</div>;
+  }
+  if (errorProduct) {
+    return <div className="text-center py-20 text-red-500">Error: {errorProduct}</div>;
+  }
+  if (!product) {
+    return <div className="text-center py-20">Product not found.</div>;
+  }
+
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : [product.image || 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600'];
 
   return (
     <div className="w-full bg-[#f8fafc] min-h-screen pb-12 font-sans text-[#0F243E]">

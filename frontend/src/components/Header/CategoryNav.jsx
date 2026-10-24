@@ -67,6 +67,25 @@ export const CategoryNav = () => {
               </div>
             )}
           </div>
+
+          <Link
+            to="/shop"
+            className="text-xs font-bold uppercase tracking-wider hover:text-toyOrange transition-colors py-3"
+          >
+            All Toys
+          </Link>
+          <Link
+            to="/shop-by-age"
+            className="text-xs font-bold uppercase tracking-wider hover:text-toyOrange transition-colors py-3"
+          >
+            Shop By Age
+          </Link>
+          <Link
+            to="/shop-by-category"
+            className="text-xs font-bold uppercase tracking-wider hover:text-toyOrange transition-colors py-3"
+          >
+            Categories
+          </Link>
         </div>
 
         {/* Affiliate Program Button */}

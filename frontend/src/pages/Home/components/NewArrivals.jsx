@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Heart, Star } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
@@ -61,6 +61,31 @@ export const newArrivalsProducts = [
 export const NewArrivals = () => {
   const { addToCart } = useCart();
   const [wishlist, setWishlist] = useState({});
+  const [products, setProducts] = useState(newArrivalsProducts);
+
+  useEffect(() => {
+    fetch('/api/v1/products')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const dbProducts = data.data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.id,
+            brand: p.brand || 'ToyCulture',
+            price: p.price,
+            badge: p.badge === 'discount' ? (p.discount || 'Sale') : 'New',
+            rating: p.rating || 4.8,
+            reviewsCount: p.reviews || 0,
+            image: p.image,
+            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
+            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
+          }));
+          setProducts(dbProducts);
+        }
+      })
+      .catch((err) => console.log('Error fetching new arrivals:', err));
+  }, []);
 
   const toggleWishlist = (id, e) => {
     e.preventDefault();
@@ -85,7 +110,7 @@ export const NewArrivals = () => {
 
         {/* Desktop Layout (1440px) - 4 Columns Grid */}
         <div className="hidden md:grid grid-cols-4 gap-4 lg:gap-6">
-          {newArrivalsProducts.map((product) => {
+          {products.map((product) => {
             const isFav = !!wishlist[product.id];
 
             return (
@@ -177,7 +202,7 @@ export const NewArrivals = () => {
 
         {/* Mobile Layout (375px) - 2 Columns x 2 Rows Grid matching reference */}
         <div className="grid grid-cols-2 gap-3 md:hidden">
-          {newArrivalsProducts.map((product) => {
+          {products.map((product) => {
             const isFav = !!wishlist[product.id];
 
             return (

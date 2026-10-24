@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -20,104 +20,11 @@ const makePlaceholder = (text) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-export const products = [
-  {
-    id: 1,
-    name: 'Lamborghini Huracán LP 610-4',
-    brand: 'Maisto',
-    price: 2399,
-    originalPrice: 2999,
-    discount: '20%',
-    rating: 4.8,
-    reviews: 124,
-    image: '/lamborghini.jpg',
-    badge: 'discount'
-  },
-  {
-    id: 2,
-    name: 'City Space Base and Rocket Launch Pad',
-    brand: 'LEGO',
-    price: 5599,
-    originalPrice: null,
-    discount: null,
-    rating: 4.7,
-    reviews: 96,
-    image: '/lego.jpg',
-    badge: 'new'
-  },
-  {
-    id: 3,
-    name: 'Elite 2.0 Commander RD-6 Blaster',
-    brand: 'NERF',
-    price: 1299,
-    originalPrice: null,
-    discount: null,
-    rating: 4.7,
-    reviews: 78,
-    image: '/nerf.jpg',
-    badge: null
-  },
-  {
-    id: 4,
-    name: 'Teddy Bear (50 cm)',
-    brand: 'Hamleys',
-    price: 1699,
-    originalPrice: 1999,
-    discount: '15%',
-    rating: 4.9,
-    reviews: 210,
-    image: '/teddy.jpg',
-    badge: 'discount'
-  },
-  {
-    id: 5,
-    name: 'Ferrari SF23 1:18 Scale',
-    brand: 'Bburago',
-    price: 4299,
-    originalPrice: null,
-    discount: null,
-    rating: 4.8,
-    reviews: 112,
-    image: '/ferrari.jpg',
-    badge: 'bestseller'
-  },
-  {
-    id: 6,
-    name: 'Mechanical Marble Run',
-    brand: 'Smartivity',
-    price: 2499,
-    originalPrice: null,
-    discount: null,
-    rating: 4.6,
-    reviews: 64,
-    image: '/marble.jpg',
-    badge: 'new'
-  },
-  {
-    id: 7,
-    name: 'Junior Ring Stacker',
-    brand: 'Funskool',
-    price: 599,
-    originalPrice: 849,
-    discount: '30%',
-    rating: 4.5,
-    reviews: 93,
-    image: '/stacker.jpg',
-    badge: 'discount'
-  },
-  {
-    id: 8,
-    name: 'Creative Tub (20 Pieces)',
-    brand: 'Play-Doh',
-    price: 899,
-    originalPrice: null,
-    discount: null,
-    rating: 4.7,
-    reviews: 128,
-    image: '/playdoh.jpg',
-    badge: 'new'
-  }
-];
+// product state moved inside component
+// loading state moved inside component
+// error state moved inside component
+
+// effect moved inside component
 
 const categories = [
   { name: 'All Toys', count: 428, checked: true },
@@ -146,6 +53,26 @@ const brands = [
 ];
 
 const ShopHome = () => {
+  // State and effect for fetching products
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [errorProducts, setErrorProducts] = useState(null);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch('/api/v1/products');
+        if (!res.ok) throw new Error('Failed to fetch products');
+        const data = await res.json();
+        setProducts(data.success ? data.data : []);
+      } catch (err) {
+        setErrorProducts(err.message);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, []);
   const [isCategoryOpen, setIsCategoryOpen] = useState(true);
   const [isAgeOpen, setIsAgeOpen] = useState(true);
   const [isPriceOpen, setIsPriceOpen] = useState(true);
@@ -169,7 +96,9 @@ const ShopHome = () => {
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 md:mb-6">
           <div>
             <h1 className="text-[32px] md:text-[40px] font-black text-[#0F243E] leading-tight">All Toys</h1>
-            <p className="text-gray-500 text-[15px] mt-1">2,348 products</p>
+            <p className="text-gray-500 text-[15px] mt-1">
+              {loadingProducts ? "Loading toys..." : `${products.length} product${products.length === 1 ? "" : "s"}`}
+            </p>
           </div>
 
           {/* Mobile Filter & Sort Buttons */}
@@ -412,14 +341,27 @@ const ShopHome = () => {
                 <button className="text-[#F96515] text-[13px] font-bold hover:underline ml-2">Clear All</button>
               </div>
               <div className="text-[14px] text-gray-500">
-                Showing 1 – 16 of 2,348 products
+                {products.length > 0 ? `Showing ${products.length} product${products.length === 1 ? "" : "s"}` : ""}
               </div>
             </div>
 
-            {/* Product Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-              {products.map((product) => (
-                <Link to={`/product/${product.id}`} key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full block">
+            {loadingProducts ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#F96515] border-t-transparent mb-3"></div>
+                <p className="text-gray-600 font-medium">Loading products from database...</p>
+              </div>
+            ) : products.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
+                <div className="text-4xl mb-3">🧸</div>
+                <h3 className="text-lg font-bold text-[#0F243E] mb-1">No products found</h3>
+                <p className="text-gray-500 text-sm max-w-sm mx-auto">
+                  Add products through the Admin Dashboard to see them displayed here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
+                {products.map((product) => (
+                  <Link to={`/product/${product.id}`} key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full block">
 
                   {/* Image & Badges */}
                   <div className="relative aspect-square mb-3 md:mb-4 bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center p-3 md:p-4">
@@ -451,6 +393,10 @@ const ShopHome = () => {
                     <img
                       src={product.image}
                       alt={product.name}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600";
+                      }}
                       className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
@@ -489,10 +435,10 @@ const ShopHome = () => {
                       </button>
                     </div>
                   </div>
-
                 </Link>
               ))}
             </div>
+          )}
 
             {/* Pagination */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 md:gap-2 mt-8 md:mt-10">

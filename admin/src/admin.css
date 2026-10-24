@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #0f1117; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+@layer components {
+  /* Toggle switch */
+  .toggle-slider {
+    @apply absolute cursor-pointer inset-0 rounded-full transition-all duration-300;
+    background: #334155;
+  }
+  .toggle-slider::before {
+    content: '';
+    @apply absolute w-[18px] h-[18px] left-[3px] top-[3px] bg-white rounded-full transition-all duration-300;
+  }
+
+  /* Spinner */
+  .spinner {
+    @apply w-4 h-4 border-2 rounded-full animate-spin;
+    border-color: rgba(255,255,255,0.3);
+    border-top-color: white;
+  }
+}

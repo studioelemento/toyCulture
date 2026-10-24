@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+*/node_modules/
+*/*/node_modules/
+
+# Environment files
+.env
+*.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+.vite/
+*/.vite/
+
+# Logs
+*.log
+logs/
+*/logs.log
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# System generated
+.agents/
+.system_generated/
+
+# Deprecated / legacy backend
+backend/
