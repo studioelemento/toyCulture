@@ -1,0 +1,393 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────── ENUMS ────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum OrderStatus {
+  PLACED
+  CONFIRMED
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  COD
+  RAZORPAY
+  WALLET
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+}
+
+enum TransactionType {
+  CREDIT
+  DEBIT
+}
+
+enum TransactionReason {
+  ORDER_PAYMENT
+  ORDER_REFUND
+  WALLET_TOPUP
+  COUPON_CASHBACK
+  ADMIN_CREDIT
+  REFERRAL_BONUS
+}
+
+// ──────────────────────────────────────── USER ────────────────────────────────────────
+
+model User {
+  id               String   @id @default(uuid())
+  first_name       String
+  last_name        String
+  email            String   @unique
+  password         String?
+  role             Role     @default(USER)
+  phone            String?
+  gender           String?
+  active           Boolean  @default(true)
+  last_login       DateTime?
+  avatar_url       String?
+  is_verified      Boolean  @default(false)
+  is_google_login  Boolean  @default(false)
+  referral_id      String   @unique @default(dbgenerated("'USR' || upper(substr(gen_random_uuid()::text, 1, 6))"))
+  referred_by      String?
+  // relations
+  addresses        Address[]
+  orders           Order[]
+  cart             Cart?
+  wishlist         Wishlist?
+  wallet           Wallet?
+  couponUsages     CouponUsage[]
+  reviews          Review[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  deletedAt        DateTime?
+}
+
+// ──────────────────────────────────────── BRAND ───────────────────────────────────────
+
+model Brand {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  seo_title       String?
+  seo_description String?
+  is_active       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  products        Product[]
+}
+
+// ──────────────────────────────────────── CATEGORY ───────────────────────────────────────
+
+model Category {
+  id              String     @id @default(uuid())
+  name            String     @unique
+  parent_id       String?
+  parent          Category?  @relation("CategoryTree", fields: [parent_id], references: [id])
+  children        Category[] @relation("CategoryTree")
+  seo_description String?
+  is_active       Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  products        Product[]
+}
+
+// ──────────────────────────────────────── PRODUCT ───────────────────────────────────────
+
+model Product {
+  id                String   @id @default(uuid())
+  name              String
+  title             String?
+  small_description String?
+  description       String
+  discount          Float    @default(0)
+  price             Float
+  mrp               Float?
+  sellingPrice      Float?
+  onOffer           Boolean  @default(false)
+  offerPrice        Float?
+  ageGroup          String?
+  stockQTY          Int      @default(0)
+  metaTitle         String?
+  metaDescription   String?
+  metaKeywords      String[]
+  is_active         Boolean  @default(true)
+  brand_id          String?
+  brand             Brand?   @relation(fields: [brand_id], references: [id])
+  category_id       String?
+  category          Category? @relation(fields: [category_id], references: [id])
+  images            Json     @default("[]")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  orderItems        OrderItem[]
+  cartItems         CartItem[]
+  wishlistItems     WishlistItem[]
+  reviews           Review[]
+  variants          ProductVariant[]
+  attributes        Attribute[]
+}
+
+// ──────────────────────────────────────── PRODUCT_VARIANT ───────────────────────────────────────
+
+model ProductVariant {
+  id            String   @id @default(uuid())
+  product_id    String
+  product       Product  @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  sku           String   @unique
+  color         String?
+  size          String?
+  stock         Int      @default(0)
+  is_active     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  orderItems    OrderItem[]
+}
+
+// ──────────────────────────────────────── REVIEW ───────────────────────────────────────
+
+model Attribute {
+  id             String    @id @default(uuid())
+  productId      String
+  attributeName  String
+  attributeValue String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  product_id String
+  user_id   String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  product   Product  @relation(fields: [product_id], references: [id])
+  user      User     @relation(fields: [user_id], references: [id])
+}
+
+// ──────────────────────────────────────── ADDRESS ───────────────────────────────────────
+
+model Address {
+  id            String   @id @default(uuid())
+  user_id       String
+  is_primary    Boolean  @default(false)
+  first_name    String
+  last_name     String
+  phone         String
+  address       String
+  place         String
+  pincode       String
+  state         String
+  address_type  String
+  landmark      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  user          User     @relation(fields: [user_id], references: [id])
+  orders        Order[]
+}
+
+// ──────────────────────────────────────── CART ───────────────────────────────────────
+
+model Cart {
+  id        String   @id @default(uuid())
+  user_id   String   @unique
+  user      User     @relation(fields: [user_id], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     CartItem[]
+}
+
+model CartItem {
+  id          String   @id @default(uuid())
+  cart_id     String
+  product_id  String
+  quantity    Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cart        Cart     @relation(fields: [cart_id], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [product_id], references: [id])
+
+  @@unique([cart_id, product_id])
+}
+
+// ──────────────────────────────────────── WISHLIST ───────────────────────────────────────
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  user_id   String   @unique
+  user      User     @relation(fields: [user_id], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     WishlistItem[]
+}
+
+model WishlistItem {
+  id          String   @id @default(uuid())
+  wishlist_id String
+  product_id  String
+  createdAt   DateTime @default(now())
+
+  wishlist    Wishlist @relation(fields: [wishlist_id], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [product_id], references: [id])
+
+  @@unique([wishlist_id, product_id])
+}
+
+// ──────────────────────────────────────── ORDER ───────────────────────────────────────
+
+model Order {
+  couponUsages CouponUsage[]
+  id                String   @id @default(uuid())
+  order_number      String   @unique @default(dbgenerated("'ORD-' || upper(substr(gen_random_uuid()::text, 1, 9))"))
+  user_id           String
+  coupon_id         String?
+  total_amount      Float    @default(0)
+  delivery_fee      Float    @default(0)
+  payment_method    PaymentMethod
+  payment_status    PaymentStatus @default(PENDING)
+  transaction_id    String? @unique
+  shipping_address_id String
+  status            OrderStatus @default(PLACED)
+  status_history    Json        @default("[]")
+  cancelled_at      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  user              User     @relation(fields: [user_id], references: [id])
+  coupon            Coupon?  @relation(fields: [coupon_id], references: [id])
+  shipping_address  Address  @relation(fields: [shipping_address_id], references: [id])
+  transaction       Transaction? @relation(fields: [transaction_id], references: [id])
+  items             OrderItem[]
+}
+
+model OrderItem {
+  id            String   @id @default(uuid())
+  order_id      String
+  product_id    String
+  variant_id    String?
+  product_name  String
+  product_image String?
+  price         Float
+  quantity      Int
+  total         Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  order         Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [product_id], references: [id])
+  variant       ProductVariant? @relation(fields: [variant_id], references: [id])
+}
+
+// ──────────────────────────────────────── COUPON ───────────────────────────────────────
+
+model Coupon {
+  orders       Order[]
+  id            String   @id @default(uuid())
+  code          String   @unique
+  description   String?
+  type          CouponType
+  value         Float
+  min_order_amount Float @default(0)
+  max_discount  Float?
+  usage_limit   Int?
+  used_count    Int      @default(0)
+  per_user_limit Int     @default(1)
+  valid_from    DateTime @default(now())
+  valid_until   DateTime
+  is_active     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  usages        CouponUsage[]
+}
+
+model CouponUsage {
+  id        String   @id @default(uuid())
+  coupon_id String
+  user_id   String
+  order_id  String?
+
+  coupon    Coupon   @relation(fields: [coupon_id], references: [id])
+  user      User     @relation(fields: [user_id], references: [id])
+  order     Order?   @relation(fields: [order_id], references: [id])
+
+  @@unique([coupon_id, user_id, order_id])
+}
+
+// ──────────────────────────────────────── WALLET ───────────────────────────────────────
+
+model Wallet {
+  id        String   @id @default(uuid())
+  user_id   String   @unique
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [user_id], references: [id])
+  transactions Transaction[]
+}
+
+// ──────────────────────────────────────── TRANSACTION ───────────────────────────────────────
+
+model Transaction {
+  id           String   @id @default(uuid())
+  wallet_id    String
+  order_id     String?
+  type         TransactionType
+  reason       TransactionReason
+  amount       Float
+  balanceAfter Float
+  description  String?
+  createdAt    DateTime @default(now())
+
+  wallet       Wallet   @relation(fields: [wallet_id], references: [id])
+  order        Order?
+}
+
+// ──────────────────────────────────────── END OF SCHEMA ───────────────────────────────────────

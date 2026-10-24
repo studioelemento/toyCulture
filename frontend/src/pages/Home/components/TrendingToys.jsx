@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ShoppingCart, Heart, ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
@@ -79,7 +79,33 @@ export const trendingProductsData = [
 export const TrendingToys = () => {
   const { addToCart } = useCart();
   const [wishlist, setWishlist] = useState({});
+  const [products, setProducts] = useState(trendingProductsData);
   const carouselRef = useRef(null);
+
+  useEffect(() => {
+    fetch('/api/v1/products')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const dbProducts = data.data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.id,
+            brand: p.brand || 'ToyCulture',
+            price: p.price,
+            originalPrice: p.originalPrice,
+            discount: p.discount ? (p.discount.startsWith('-') ? p.discount : `-${p.discount}`) : null,
+            rating: p.rating || 4.8,
+            reviewsCount: p.reviews || 0,
+            image: p.image,
+            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
+            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
+          }));
+          setProducts(dbProducts);
+        }
+      })
+      .catch((err) => console.log('Error fetching trending toys:', err));
+  }, []);
 
   const toggleWishlist = (id, e) => {
     e.preventDefault();
@@ -115,7 +141,7 @@ export const TrendingToys = () => {
           </div>
 
           <Link
-            to="/shop-by-category"
+            to="/shop"
             className="text-xs sm:text-sm md:text-[15px] font-bold text-[#F96515] hover:text-[#EA580C] transition-colors flex items-center gap-1 sm:gap-1.5 flex-shrink-0 cursor-pointer pb-1"
           >
             <span>View All</span>
@@ -140,7 +166,7 @@ export const TrendingToys = () => {
             ref={carouselRef}
             className="grid grid-cols-5 gap-4 lg:gap-5 overflow-x-auto no-scrollbar scroll-smooth py-2"
           >
-            {trendingProductsData.map((product) => {
+            {products.map((product) => {
               const isFav = !!wishlist[product.id];
 
               return (
@@ -251,7 +277,7 @@ export const TrendingToys = () => {
 
         {/* Mobile Layout (375px) - Stacked Cards matching reference */}
         <div className="flex flex-col gap-3.5 md:hidden">
-          {trendingProductsData.map((product) => {
+          {products.map((product) => {
             const isFav = !!wishlist[product.id];
 
             return (
