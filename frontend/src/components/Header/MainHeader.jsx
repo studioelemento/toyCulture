@@ -119,35 +119,51 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
 
         {/* Right Tools (Account & Cart) */}
         <div className="flex items-center gap-4 md:gap-6">
-          {/* User Account */}
-          {isLoggedIn ? (
-            <div className="hidden sm:flex items-center gap-3">
-              <Link
-                to="/account"
-                className="flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors"
-              >
-                <div className="w-7 h-7 rounded-full bg-toyOrange/20 text-toyOrange flex items-center justify-center font-black text-xs">
-                  {currentUser?.name?.[0]?.toUpperCase() || 'U'}
-                </div>
-                <span>{currentUser?.name || 'My Account'}</span>
-              </Link>
-              <button
-                onClick={logout}
-                className="text-gray-400 hover:text-toyRed transition-colors p-1"
-                title="Log Out"
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
-          ) : (
+          {/* User Account & Login Tools */}
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Dedicated Account Icon / Link */}
             <Link
-              to="/login"
-              className="hidden sm:flex items-center gap-2 text-xs font-bold uppercase hover:text-toyOrange transition-colors cursor-pointer"
+              to="/account"
+              className="flex items-center gap-1.5 text-xs font-bold uppercase hover:text-toyOrange transition-colors group"
+              title="My Account"
             >
-              <User size={20} className="text-toyOrange" />
-              <span>Login / Register</span>
+              <div className="w-8 h-8 rounded-full bg-white/10 hover:bg-toyOrange/20 border border-white/20 group-hover:border-toyOrange flex items-center justify-center transition-all">
+                <User size={18} className="text-white group-hover:text-toyOrange transition-colors" />
+              </div>
+              <span className="hidden xl:inline text-[11px] font-bold text-gray-200 group-hover:text-toyOrange">
+                Account
+              </span>
             </Link>
-          )}
+
+            {/* Login / Register or Profile pill */}
+            {isLoggedIn ? (
+              <div className="hidden sm:flex items-center gap-2 bg-white/10 py-1 px-2.5 rounded-full border border-white/10">
+                <Link
+                  to="/account"
+                  className="flex items-center gap-2 text-xs font-bold hover:text-toyOrange transition-colors"
+                >
+                  <div className="w-5 h-5 rounded-full bg-toyOrange text-white flex items-center justify-center font-black text-[10px]">
+                    {currentUser?.name?.[0]?.toUpperCase() || 'U'}
+                  </div>
+                  <span className="max-w-[100px] truncate">{currentUser?.name || 'My Account'}</span>
+                </Link>
+                <button
+                  onClick={logout}
+                  className="text-gray-300 hover:text-toyRed transition-colors p-0.5 ml-1"
+                  title="Log Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-bold uppercase text-gray-200 hover:text-toyOrange transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/15"
+              >
+                <span>Login / Register</span>
+              </Link>
+            )}
+          </div>
 
           {/* Shopping Cart Trigger */}
           <button
