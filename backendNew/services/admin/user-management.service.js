@@ -1,76 +1,67 @@
+import { prisma } from "../../config/prisma.js";
 
-import { User } from "../../models/user.model.js";
-import { filterOptions } from "../../utils/CONSTANTS.js";
-
+// ─────────────────────────────────────────────────────────────────────────────
+// GET ALL USERS  (admin — paginated, searchable, filterable)
+// ─────────────────────────────────────────────────────────────────────────────
 export const getAllUsersService = async (query) => {
-    // spliting data from queey
-    const limit = Number(query.limit) || 10;
-    const page = Number(query.page) || 1;
-    const search = query.search || "";
-    let sortField = query.sort || "createdAt";
-    let filter = query.filter || "AllUsers";
-    const order = query.order === "desc" ? -1 : 1;
+    const limit  = Math.min(Number(query.limit) || 10, 100);
+    const page   = Math.max(Number(query.page)  || 1, 1);
+    const search = query.search?.trim() || "";
+    const filter = query.filter || "AllUsers";
+    const sortBy = query.sort  || "createdAt";
+    const order  = query.order === "asc" ? "asc" : "desc";
 
-    //getting key from filterOption
-    let filterCriteria = {...filterOptions[filter] || {}};
+    // Build where clause
+    const where = { deletedAt: null };
 
-    //If search match condition
+    if (filter === "ActiveUsers")  where.active = true;
+    if (filter === "InActiveUsers") where.active = false;
+    if (filter === "Admin")        where.role = "ADMIN";
+    if (filter === "User")         where.role = "USER";
+
     if (search) {
-        filterCriteria.$or = [
-            { name: { $regex: search, $options: "i" } },
-            { email: { $regex: search, $options: "i" } },
+        where.OR = [
+            { first_name: { contains: search, mode: "insensitive" } },
+            { last_name:  { contains: search, mode: "insensitive" } },
+            { email:      { contains: search, mode: "insensitive" } },
         ];
     }
-    console.log(filterCriteria.$or, filter, limit * page, order, sortField);
 
-
-    const aggregationPipeline = [
-        {
-            $facet: {
-                total_users: [{ $count: "total" }],
-                total_users_entries : [{$match : filterCriteria }, {$count : 'total'}],
-
-                data: [
-                      { $match: filterCriteria },
-                    { $sort: { [sortField]: order } },
-                    { $skip: limit * (page - 1) },
-                    { $limit: limit },
-                    { $project: { password: 0 } },
-                ],
-                blocked_users: [
-                    { $match: { active: false } },
-                    { $count: "count" },
-                ],
+    const [data, totalUsers, blockedUsers] = await Promise.all([
+        prisma.user.findMany({
+            where,
+            select: {
+                id:         true,
+                first_name: true,
+                last_name:  true,
+                email:      true,
+                phone:      true,
+                role:       true,
+                active:     true,
+                gender:     true,
+                avatar_url: true,
+                is_verified: true,
+                is_google_login: true,
+                referral_id: true,
+                last_login: true,
+                createdAt:  true,
+                updatedAt:  true,
+                // Exclude password
             },
-        },
-        {
-            $project: {
-                data: 1,
-                total_users: { $arrayElemAt: ["$total_users.total", 0] },
-                blocked_users: {
-                    $arrayElemAt: ["$blocked_users.count", 0],
-                },
-                pages : {$cond : {
-                    if : {
-                        $gt : [{ $arrayElemAt : ['$total_users_entries.total', 0]} , 0]
-                    },then : {
-                        $ceil : {
-                            $divide : [
-                                {
-                                    $arrayElemAt : ['$total_users_entries.total', 0]
-                                },
-                                limit
-                            ]
-                        }
-                    },else : 0
-                }},
-                page: { $literal: page },
-                limit: { $literal: limit },
-            },
-        },
-    ];
+            orderBy: { [sortBy]: order },
+            skip:    limit * (page - 1),
+            take:    limit,
+        }),
+        prisma.user.count({ where }),
+        prisma.user.count({ where: { deletedAt: null, active: false } }),
+    ]);
 
-    const users = await User.aggregate(aggregationPipeline);
-    //since aggregation return is array returning first object
-    return users[0];
+    return {
+        data,
+        total_users:   totalUsers,
+        blocked_users: blockedUsers,
+        pages:         Math.ceil(totalUsers / limit),
+        page,
+        limit,
+    };
 };

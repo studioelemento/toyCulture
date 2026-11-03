@@ -1,115 +1,134 @@
-import { Product } from "../../models/product.model.js";
-import { productValidator } from "../../validators/productValidator.js";
-import { generateSKU } from "../../utils/generateSKU.js";
-import { ProductVariant } from "../../models/product_variants.model.js";
-import mongoose from "mongoose";
-import { uploadImages } from "../../utils/cloudinary.js";
 import {
-    editProductService,
     getAllProductService,
     getProductService,
     createProductService,
+    editProductService,
+    toggleProductService,
+    deleteProductService,
 } from "../../services/admin/product-management.service.js";
+import { productValidator } from "../../validators/productValidator.js";
+import ErrorWithStatus from "../../config/ErrorWithStatus.js";
+import { HTTP_RES } from "../../utils/CONSTANTS.js";
+import { logger } from "../../utils/logger.js";
 
-export const addProduct = async (req, res, next) => {
-  // Parse incoming data and validate
-  const parsedData = { ...req.body, variants: JSON.parse(req.body.variants) };
-  const { value, error } = productValidator(parsedData);
-  if (req.files.length < 4) {
-    res.status(400);
-    throw new Error("4 images required");
-  }
-  if (error) {
-    res.status(400);
-    throw error;
-  }
-
-  try {
-    // Delegate creation to Prisma‑based service
-    const createdProduct = await createProductService(value, req);
-    res.status(201).json({
-      message: "Product Created Successfully",
-      data: createdProduct,
-      status: "success",
-    });
-  } catch (err) {
-    console.log(err);
-    next(err);
-  }
-};
-
+// ─────────────────────────────────────────────────────────────────────────────
+// GET ALL PRODUCTS  — GET /api/admin/products
+// ─────────────────────────────────────────────────────────────────────────────
 export const getAllProducts = async (req, res, next) => {
     try {
-        const query = req.query;
-        console.log(query);
-        const productRes = await getAllProductService(query);
-        res.status(200).json(productRes);
+        const result = await getAllProductService(req.query);
+        return res.status(200).json({ success: true, ...result });
     } catch (error) {
+        logger.error("Admin getAllProducts failed:", error.message);
         next(error);
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET SINGLE PRODUCT  — GET /api/admin/products/:id
+// ─────────────────────────────────────────────────────────────────────────────
 export const getProduct = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const product = await getProductService(id);
-        console.log(product);
-        res.status(200).json({
-            message: "product found successfully",
-            data: product,
-            status: "success",
+        const product = await getProductService(req.params.id);
+        return res.status(200).json({
+            success: true,
+            message: "Product retrieved successfully",
+            data:    product,
         });
     } catch (error) {
+        logger.error("Admin getProduct failed:", error.message);
         next(error);
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CREATE PRODUCT  — POST /api/admin/products
+// ─────────────────────────────────────────────────────────────────────────────
+export const addProduct = async (req, res, next) => {
+    try {
+        const parsedBody = {
+            ...req.body,
+            variants: JSON.parse(req.body.variants || "[]"),
+        };
+        const { value, error } = productValidator(parsedBody);
+
+        if (error) {
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
+        }
+        if (!req.files || req.files.length < 1) {
+            throw new ErrorWithStatus("At least 1 product image is required", HTTP_RES.BAD_REQUEST);
+        }
+
+        const product = await createProductService(value, req);
+        return res.status(201).json({
+            success: true,
+            message: "Product created successfully",
+            data:    product,
+        });
+    } catch (error) {
+        logger.error("Admin addProduct failed:", error.message);
+        next(error);
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EDIT PRODUCT  — PUT|PATCH /api/admin/products/:id
+// ─────────────────────────────────────────────────────────────────────────────
 export const editProduct = async (req, res, next) => {
     try {
         const { id } = req.params;
-        console.log(req.body)
-        const {value , error} = productValidator({ ...req.body, variants: JSON.parse(req.body.variants) });
-        if(error){
-            throw error
-        }
-        console.log(value , 223)
-        // if (value.images.length + data.imagesData.filter(x => )) {
-        //     res.status(400);
-        //     throw new Error("4 images required");
-        // }
+        const parsedBody = {
+            ...req.body,
+            variants: JSON.parse(req.body.variants || "[]"),
+        };
+        const { value, error } = productValidator(parsedBody);
 
-        // console.log(req.body,id, 3434);
-        // Todo MIGHT ADD VALIDATOR
-        // console.log(req.body);
+        if (error) {
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
+        }
+
         const product = await editProductService(id, value, req);
-        res.status(200).json({
-            message: "product edited successfully",
-            datat: product,
-            status: "success",
+        return res.status(200).json({
+            success: true,
+            message: "Product updated successfully",
+            data:    product,
         });
     } catch (error) {
-        console.log(1235334, error);
+        logger.error("Admin editProduct failed:", error.message);
         next(error);
     }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TOGGLE PRODUCT STATUS  — PATCH /api/admin/products/toggle-status/:id
+// ─────────────────────────────────────────────────────────────────────────────
 export const toggleProduct = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const product = await Product.findById(id);
-        if (!product) {
-            res.status(404);
-            throw new Error("No product with Id found");
-        }
-        product.is_active = !product.is_active;
-
-        await product.save();
-        console.log(product, 9990);
-        res.status(200).json({
-            message: "Product toggled successfulyy",
-            status: "success",
+        const result = await toggleProductService(req.params.id);
+        return res.status(200).json({
+            success: true,
+            message: `Product ${result.is_active ? "activated" : "deactivated"} successfully`,
+            data:    result,
         });
     } catch (error) {
+        logger.error("Admin toggleProduct failed:", error.message);
+        next(error);
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE PRODUCT  — DELETE /api/admin/products/:id
+// ─────────────────────────────────────────────────────────────────────────────
+export const deleteProduct = async (req, res, next) => {
+    try {
+        const result = await deleteProductService(req.params.id);
+        return res.status(200).json({
+            success: true,
+            message: "Product deleted successfully",
+            data:    result,
+        });
+    } catch (error) {
+        logger.error("Admin deleteProduct failed:", error.message);
         next(error);
     }
 };

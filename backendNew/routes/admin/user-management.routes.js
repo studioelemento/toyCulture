@@ -6,11 +6,15 @@ import { checkAdminRole } from "../../middlewares/admin.middleware.js";
 const router = express.Router();
 
 router.use(authenticateUser);
-router.use(checkAdminRole)
+router.use(checkAdminRole);
 
+router.get("/", getAllUsers);
+router.get("/:id", getUsersById);
+router.patch("/toggle-state/:id", toggleUserState);
+
+// Backward compatibility if called with /users prefix
 router.get("/users", getAllUsers);
 router.get("/users/:id", getUsersById);
 router.patch("/users/toogle-state/:id", toggleUserState);
-
 
 export default router;

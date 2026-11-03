@@ -1,342 +1,252 @@
+import { prisma } from "../../config/prisma.js";
 import { computeDateRange } from "../../services/admin/salesReport.service.js";
-import { Order } from "../../models/order.model.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
-import { OrderItem } from "../../models/order_item.model.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import cloudinary from "../../utils/cloudinary.js";
+import { logger } from "../../utils/logger.js";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET SALES REPORT  — GET /api/admin/reports
+// ─────────────────────────────────────────────────────────────────────────────
 export const getSalesReportController = async (req, res, next) => {
-	try {
-		const { range, start, end, page = 1, limit = 10 } = req.query;
-		const { startDate, endDate } = computeDateRange(range, start, end);
-		console.log(startDate, endDate);
-		const skip = (page - 1) * limit;
-		const filter = {
-			createdAt: { $gte: startDate, $lte: endDate },
-		};
-		const totalOrders = await Order.countDocuments(filter);
-		const grandTotalOrder = await Order.countDocuments();
-		const order = await Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit));
+    try {
+        const { range, start, end, page = 1, limit = 10 } = req.query;
+        const { startDate, endDate } = computeDateRange(range, start, end);
+        const pageNum  = Math.max(Number(page) || 1, 1);
+        const limitNum = Math.min(Number(limit) || 10, 100);
 
-		filter.payment_status = "PAID";
+        const dateFilter = {
+            createdAt: { gte: startDate, lte: endDate },
+            deletedAt: null,
+        };
 
-		const totalPages = Math.ceil(totalOrders / limit);
-		const [{ grandTotal: grandTotalAmount = 0 } = {}] = await Order.aggregate([
-			{ $match: { payment_status: "PAID" } },
-			{ $group: { _id: null, grandTotal: { $sum: "$total_amount" } } },
-		]);
-		const [{ grandTotalDiscount = 0 } = {}] = await OrderItem.aggregate([
-			{
-				$lookup: {
-					from: "orders",
-					localField: "order_id",
-					foreignField: "_id",
-					as: "order_details",
-				},
-			},
-			{
-				$unwind: "$order_details",
-			},
-			{
-				$match: {
-					// "order_details.createdAt": { $gte: startDate, $lte: endDate },
-					"order_details.payment_status": "PAID",
-					is_cancelled: false,
-					is_returned: false,
-				},
-			},
-			{
-				$project: {
-					_id: 0,
-					discountAmount: {
-						$multiply: [
-							{ $toDouble: "$price" },
-							"$quantity",
-							{ $divide: ["$discount", 100] },
-						],
-					},
-				},
-			},
-			{
-				$group: {
-					_id: null,
-					grandTotalDiscount: { $sum: "$discountAmount" },
-				},
-			},
-		]);
+        const [orders, totalOrders, grandTotalOrder, revenueAgg] = await Promise.all([
+            prisma.order.findMany({
+                where:   dateFilter,
+                include: {
+                    user:  { select: { id: true, first_name: true, last_name: true, email: true } },
+                    items: true,
+                    coupon: { select: { id: true, code: true, type: true, value: true, max_discount: true } },
+                },
+                orderBy: { createdAt: "desc" },
+                skip:    limitNum * (pageNum - 1),
+                take:    limitNum,
+            }),
+            prisma.order.count({ where: dateFilter }),
+            prisma.order.count({ where: { deletedAt: null } }),
+            prisma.order.aggregate({
+                where: { deletedAt: null, payment_status: "PAID" },
+                _sum:  { total_amount: true },
+            }),
+        ]);
 
-		// const [{ totalCouponDiscountAmount = 0, totalCouponsUsed = 0 } = {}] = await Order.aggregate([
-		// 	{
-		// 		$match: {
-		// 			payment_status: "PAID",
-		// 			coupon_id: { $ne: null },
-		// 		},
-		// 	},
-		//     {
-		//         $lookup : {
-		//             from :'coupons',
-		//             localField : 'coupon_id',
-		//             foreignField : '_id',
-		//             as : 'coupon_details'
-		//         }
-		//     },{
-		//         $unwind : '$coupon_details'
-		//     },{
-		//         $project : {
-		//             potentialDiscount : {
-		//                 $multiply : [
-		//                     '$total_amount' ,
-		//                     {$divide : ['$coupon_details.discount_percentage',100]}
-		//                 ]
-		//             },
-		//             minOrderAmount : '$coupon_details.min_order_amount',
-		//             maxDiscountAmount : '$coupon_details.max_discount_amount',
-		//             orderTotal : '$total_amount'
-		//         }
-		//     },{
-		//         $project : {
-		//             effectiveDiscount : {
-		//                 $cond : {
-		//                     if : {$lt : ["$orderTotal", "$minOrderAmount"]},
-		//                     then : 0,
-		//                     else :{
-		//                         $cond : {
-		//                             if : {$gt : ['$potentialDiscount','$maxDiscountAmount']},
-		//                             then : '$maxDiscountAmout',
-		//                             else : "$potentialDiscountAmount"
-		//                         }
-		//                     }
-		//                 }
-		//             }
-		//         }
-		//     },
-		// 	{
-		//         $group : {
-		//             _id : null,
-		//             totalCouponsUsed : { $sum : 1},
-		//             totalCouponDiscountAmount : {$sum : '$effectiveDiscount'}
-		//         }
-		//     },
-		// ]);
+        const grandTotalAmount = revenueAgg._sum.total_amount ?? 0;
+        const totalPages = Math.ceil(totalOrders / limitNum);
 
-		const couponOrders = await Order.find({ payment_status: "PAID", coupon_id: { $ne: null } })
-			.select("total_amount coupon_id")
-			.populate("coupon_id")
-			.lean();
+        // Calculate coupon discounts from paid orders with coupons
+        const couponOrders = await prisma.order.findMany({
+            where: {
+                deletedAt:      null,
+                payment_status: "PAID",
+                coupon_id:      { not: null },
+            },
+            include: {
+                coupon: true,
+                items:  true,
+            },
+        });
 
-		let totalCouponDiscountAmount = 0,
-			totalCouponsUsed = 0;
-		console.log(couponOrders);
+        let totalCouponDiscountAmount = 0;
+        let totalCouponsUsed          = 0;
 
-		for (const order of couponOrders) {
-			const coupon = order.coupon_id;
-			if (!coupon || !coupon.discount_percentage) continue;
-			const orderItems = await OrderItem.find({
-				order_id: order._id,
-				is_returned: false,
-				is_cancelled: false,
-			}).lean();
-			let subTotal = 0;
-			console.log(orderItems);
+        for (const order of couponOrders) {
+            if (!order.coupon) continue;
 
-			for (const item of orderItems) {
-				const itemPrice = parseFloat(item.price.toString());
-				const itemQuantity = item.quantity;
-				const itemDiscount = item.discount / 100;
+            const subtotal = order.items.reduce(
+                (acc, item) => acc + item.price * item.quantity,
+                0
+            );
 
-				const netPrice = itemPrice * itemQuantity * (1 - itemDiscount);
-				console.log(netPrice);
-				subTotal += netPrice;
-			}
+            if (subtotal >= (order.coupon.min_order_amount || 0)) {
+                let discount = 0;
+                if (order.coupon.type === "PERCENTAGE") {
+                    discount = (subtotal * order.coupon.value) / 100;
+                    if (order.coupon.max_discount && discount > order.coupon.max_discount) {
+                        discount = order.coupon.max_discount;
+                    }
+                } else {
+                    discount = order.coupon.value;
+                }
+                totalCouponDiscountAmount += discount;
+                totalCouponsUsed++;
+            }
+        }
 
-			if (subTotal >= coupon.min_order_amount) {
-				// let potentialDiscount = subTotal * (coupon.discount_percentage / 100)
-				// console.log(subTotal)
-				// let effectiveDiscount ;
-				// if(potentialDiscount > coupon.max_discount_amount){
-				//     effectiveDiscount = coupon.max_discount_amount
-				// }else{
-				//     effectiveDiscount = potentialDiscount
-				// }
-				// totalCouponDiscountAmount+= effectiveDiscount
-				// console.log(totalCouponDiscountAmount)
-				const potentialDiscount = subTotal * (coupon.discount_percentage / 100);
-				const effectiveDiscount =
-					potentialDiscount > coupon.max_discount_amount
-						? coupon.max_discount_amount
-						: potentialDiscount;
-				console.log(effectiveDiscount, order.total_amount, subTotal);
-				totalCouponDiscountAmount += effectiveDiscount;
-				totalCouponsUsed++;
-			}
-		}
-
-		console.log(totalCouponDiscountAmount);
-		res.status(HTTP_RES.OK).json({
-			message: "Report Recieved Succesfully",
-			data: {
-				order,
-				pages: totalPages,
-				page,
-				limit,
-				startDate,
-				endDate,
-				grandTotalOrder,
-				grandTotalAmount,
-				grandTotalDiscount,
-				totalCouponDiscountAmount,
-                totalCouponsUsed
-			},
-			status: "success",
-		});
-	} catch (error) {
-		next(error);
-	}
+        return res.status(HTTP_RES.OK).json({
+            success: true,
+            message: "Report retrieved successfully",
+            data: {
+                orders,
+                pages:     totalPages,
+                page:      pageNum,
+                limit:     limitNum,
+                startDate,
+                endDate,
+                grandTotalOrder,
+                grandTotalAmount,
+                totalCouponDiscountAmount: Math.round(totalCouponDiscountAmount * 100) / 100,
+                totalCouponsUsed,
+            },
+        });
+    } catch (error) {
+        logger.error("getSalesReport failed:", error.message);
+        next(error);
+    }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET SALES REPORT (DOWNLOADABLE)  — GET /api/admin/reports/download
+// ─────────────────────────────────────────────────────────────────────────────
 export const getSalesReportDownloadableController = async (req, res, next) => {
-	try {
-		const { range, start, end } = req.query;
-		const { startDate, endDate } = computeDateRange(range, start, end);
+    try {
+        const { range, start, end } = req.query;
+        const { startDate, endDate } = computeDateRange(range, start, end);
 
-		const filter = {
-			createdAt: { $gte: startDate, $lte: endDate },
-		};
-		const totalOrders = await Order.countDocuments(filter);
-		const orders = await Order.find(filter)
-			.sort({ createdAt: -1 })
-			.populate([
-				{ path: "user_id", select: "email phone first_name last_name" },
-				{ path: "shipping_address_id" },
-				{ path: "coupon_id", select: "discount_percentage name code" },
-			])
-			.lean();
-		const simplifiedOrders = [];
+        const orders = await prisma.order.findMany({
+            where: {
+                createdAt: { gte: startDate, lte: endDate },
+                deletedAt: null,
+            },
+            include: {
+                user:             { select: { email: true, phone: true, first_name: true, last_name: true } },
+                shipping_address: true,
+                coupon:           { select: { type: true, value: true, code: true, max_discount: true, min_order_amount: true } },
+                items: {
+                    include: {
+                        product: { select: { id: true, name: true, images: true } },
+                        variant: { select: { color: true, size: true } },
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
 
-		for (const order of orders) {
-			// Get all order items
-			const orderItems = await OrderItem.find({ order_id: order._id })
-				.populate({
-					path: "variant_id",
-					populate: { path: "product_id", select: "images name" },
-				})
-				.lean();
+        const simplifiedOrders = orders.map((order) => {
+            const subtotal = order.items.reduce(
+                (acc, item) => acc + item.price * item.quantity,
+                0
+            );
 
-			// Calculate subtotal and discounts
-			const activeItems = orderItems.filter((item) => !item.is_cancelled && !item.is_returned);
+            let couponDiscountApplied = 0;
+            if (order.coupon) {
+                if (subtotal >= (order.coupon.min_order_amount || 0)) {
+                    if (order.coupon.type === "PERCENTAGE") {
+                        couponDiscountApplied = (subtotal * order.coupon.value) / 100;
+                        if (order.coupon.max_discount && couponDiscountApplied > order.coupon.max_discount) {
+                            couponDiscountApplied = order.coupon.max_discount;
+                        }
+                    } else {
+                        couponDiscountApplied = order.coupon.value;
+                    }
+                }
+            }
 
-			const subtotal = activeItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
-			const discountApplied = activeItems.reduce(
-				(acc, item) => acc + item.price * (item.discount / 100) * item.quantity,
-				0
-			);
+            return {
+                ...order,
+                subtotal: Math.round(subtotal * 100) / 100,
+                couponDiscountApplied: Math.round(couponDiscountApplied * 100) / 100,
+            };
+        });
 
-			let couponDiscountApplied = 0;
-			if (order.coupon_id?.discount_percentage) {
-				const coupon = order.coupon_id;
-				const subtotalAfterItemDiscount = subtotal - discountApplied;
-
-				// Only apply if min order condition is met
-				if (subtotalAfterItemDiscount >= (coupon.min_order_amount || 0)) {
-					const potentialDiscount = subtotalAfterItemDiscount * (coupon.discount_percentage / 100);
-					couponDiscountApplied = Math.min(
-						potentialDiscount,
-						coupon.max_discount_amount || potentialDiscount
-					);
-				}
-			}
-
-			simplifiedOrders.push({
-				...order,
-				subtotal,
-				discountApplied,
-				couponDiscountApplied,
-			});
-		}
-		res.status(HTTP_RES.OK).json({
-			message: "Report Recieved Succesfully",
-			data: { order: simplifiedOrders, totalOrders, startDate, endDate },
-			status: "success",
-		});
-	} catch (error) {
-		next(error);
-	}
+        return res.status(HTTP_RES.OK).json({
+            success: true,
+            message: "Downloadable report retrieved successfully",
+            data: {
+                orders:     simplifiedOrders,
+                totalOrders: simplifiedOrders.length,
+                startDate,
+                endDate,
+            },
+        });
+    } catch (error) {
+        logger.error("getSalesReportDownloadable failed:", error.message);
+        next(error);
+    }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET SINGLE ORDER INVOICE  — GET /api/admin/reports/:id
+// ─────────────────────────────────────────────────────────────────────────────
 export const getSaleReportDownloadableController = async (req, res, next) => {
-	try {
-		const { id } = req.params;
-		const order = await Order.findOne({ _id: id, })
-			.populate([
-				{ path: "shipping_address_id" },
-				{ path: "coupon_id", select: "discount_percentage name code max_discount_amount" },
-				{
-					path: "transaction_id",
-					select: "razorpay_order_id",
-				},
-			])
-			.lean();
+    try {
+        const { id } = req.params;
 
-		if (!order) throw new ErrorWithStatus("Order not found", HTTP_RES.NOT_FOUND);
+        const order = await prisma.order.findUnique({
+            where: { id },
+            include: {
+                shipping_address: true,
+                coupon:           true,
+                items: {
+                    include: {
+                        product: { select: { id: true, name: true, images: true } },
+                        variant: { select: { color: true, size: true } },
+                    },
+                },
+            },
+        });
 
-		const orderItems = await OrderItem.find({ order_id: order._id })
-			.populate([
-				{
-					path: "variant_id",
-					populate: { path: "product_id", select: "images name" },
-					select: "color size",
-				},
-			])
-			.lean();
+        if (!order) {
+            throw new ErrorWithStatus("Order not found", HTTP_RES.NOT_FOUND);
+        }
 
-		const simplifiedOrder = {
-			...order,
-			items: orderItems.map((x) => {
-				const variant = x.variant_id;
-				const product = variant.product_id;
+        // Resolve images
+        const items = order.items.map((item) => {
+            let imageUrl = "";
+            const images = item.product?.images;
+            if (Array.isArray(images) && images.length > 0) {
+                const first = images[0];
+                const raw   = typeof first === "string" ? first : first?.url || "";
+                imageUrl    = raw.startsWith("http") ? raw : cloudinary.url(raw, { secure: true });
+            }
 
-				return {
-					...x,
-					images: cloudinary.url(product.images[0].url, {
-						secure: true,
-					}),
-					name: product.name,
-					color: variant.color,
-					size: variant.size,
-					price: x.price.toString(),
-				};
-			}),
-		};
+            return {
+                ...item,
+                image: imageUrl,
+                name:  item.product_name || item.product?.name || "Unknown",
+                color: item.variant?.color || null,
+                size:  item.variant?.size  || null,
+            };
+        });
 
-		const subtotal = simplifiedOrder.items
-			.filter((x) => !x.is_cancelled)
-			.reduce((acc, cur) => cur.price * cur.quantity + acc, 0);
-		const discountApplied = simplifiedOrder.items.reduce(
-			(acc, cur) => acc + cur.price * (cur.discount / 100) * cur.quantity,
-			0
-		);
+        const subtotal = items.reduce(
+            (acc, item) => acc + item.price * item.quantity,
+            0
+        );
 
-		let couponDiscountApplied = 0;
-		console.log(order.coupon_id?.discount_percentage);
-		if (order.coupon_id?.discount_percentage) {
-			couponDiscountApplied = Math.min(
-				((subtotal - discountApplied) * order.coupon_id.discount_percentage) / 100,
-				order.coupon_id.max_discount_amount
-			);
-		}
+        let couponDiscountApplied = 0;
+        if (order.coupon) {
+            if (order.coupon.type === "PERCENTAGE") {
+                couponDiscountApplied = (subtotal * order.coupon.value) / 100;
+                if (order.coupon.max_discount && couponDiscountApplied > order.coupon.max_discount) {
+                    couponDiscountApplied = order.coupon.max_discount;
+                }
+            } else {
+                couponDiscountApplied = order.coupon.value;
+            }
+        }
 
-		return res.status(200).json({
-			data: {
-				...simplifiedOrder,
-				subtotal,
-				discountApplied,
-				couponDiscountApplied,
-				razorpay_order_id: order?.transaction_id?.razorpay_order_id,
-			},
-			status: "success",
-			message: "Order Recieved Successfully",
-		});
-	} catch (error) {
-		next(error);
-	}
+        return res.status(200).json({
+            success: true,
+            message: "Order invoice retrieved successfully",
+            data: {
+                ...order,
+                items,
+                subtotal:              Math.round(subtotal * 100) / 100,
+                couponDiscountApplied: Math.round(couponDiscountApplied * 100) / 100,
+            },
+        });
+    } catch (error) {
+        logger.error("getSaleReportDownloadable failed:", error.message);
+        next(error);
+    }
 };

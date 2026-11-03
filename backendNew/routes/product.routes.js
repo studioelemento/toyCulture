@@ -1,19 +1,22 @@
 import express from "express";
 import {
-  createProduct,
-  getAllProducts,
-  getProductById,
-  deleteProduct,
+    getAllProducts,
+    getProductById,
+    createProduct,
+    updateProduct,
+    deleteProduct,
 } from "../controllers/product.controller.js";
 
 const router = express.Router();
 
-// Public routes for customer storefront
+// ── Storefront read queries ──────────────────────────────────────────────────
 router.get("/", getAllProducts);
 router.get("/:id", getProductById);
 
-// Admin / creation routes
+// ── Product CRUD (used by Admin Panel AddProduct & ProductList) ──────────────
 router.post("/", createProduct);
+router.put("/:id", updateProduct);
+router.patch("/:id", updateProduct);
 router.delete("/:id", deleteProduct);
 
 export default router;

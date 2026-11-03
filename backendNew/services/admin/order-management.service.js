@@ -1,200 +1,209 @@
+import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
-import { Order } from "../../models/order.model.js";
-import { OrderItem } from "../../models/order_item.model.js";
-import { ProductVariant } from "../../models/product_variants.model.js";
-import { Transaction } from "../../models/transaction.model.js";
-import { Wallet } from "../../models/wallet.model.js";
 import { HTTP_RES, STATUS_TRANSITIONS } from "../../utils/CONSTANTS.js";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET ALL ORDERS  (admin — paginated, searchable, filterable by status)
+// ─────────────────────────────────────────────────────────────────────────────
 export const getAllOrdersService = async (query) => {
-	const limit = Number(query.limit) || 4;
-	const page = Number(query.page) || 1;
-	const search = query.search || "";
-	const sortField = query.sort || "createdAt";
-	const order = query.order === "desc" ? -1 : 1;
-	const status = query.status?.toUpperCase() || "ALL";
+    const limit  = Math.min(Number(query.limit) || 10, 100);
+    const page   = Math.max(Number(query.page)  || 1, 1);
+    const search = query.search?.trim() || "";
+    const status = query.status?.toUpperCase() || "ALL";
+    const sortBy = query.sort  || "createdAt";
+    const order  = query.order === "asc" ? "asc" : "desc";
 
-	const filterOptions = {};
-	if (status !== "ALL") {
-		filterOptions["status_history.status"] = status;
-	}
-	if (search) {
-		filterOptions.$or = [{ _id: { $regex: search, $options: "i" } }];
-	}
-	console.log(filterOptions.$or, search, sortField, 778);
+    const where = { deletedAt: null };
 
-	const aggregation_pipeline = [
-		{
-			$facet: {
-				data: [
-					{ $match: filterOptions },
-					{ $sort: { [sortField]: order } },
-					{ $skip: limit * (page - 1) },
-					{ $limit: limit },
-					{
-						$lookup: {
-							from: "users",
-							let: { userId: "$user_id" },
-							pipeline: [
-								{
-									$match: {
-										$expr: { $eq: ["$_id", "$$userId"] },
-									},
-								},
-								{ $project: { _id: 0, email: 1 } },
-							],
-							as: "user",
-						},
-					},
-					{ $unwind: "$user" },
-				],
-				total_order_entries: [{ $match: filterOptions }, { $count: "count" }],
-				total_orders: [{ $count: "count" }],
-				delivered_orders: [{ $match: { "status_history.status": "DELIVERED" } }, { $count: "count" }],
-			},
-		},
-		{
-			$project: {
-				data: 1,
-				pages: {
-					$cond: {
-						if: {
-							$gt: [
-								{
-									$arrayElemAt: ["$total_order_entries.count", 0],
-								},
-								0,
-							],
-						},
-						then: {
-							$ceil: {
-								$divide: [
-									{
-										$arrayElemAt: ["$total_order_entries.count", 0],
-									},
-									limit,
-								],
-							},
-						},
-						else: 0,
-					},
-				},
-				limit: { $literal: limit },
-				page: { $literal: page },
-				total_orders: { $arrayElemAt: ["$total_orders.count", 0] },
-				delivered_orders: {
-					$arrayElemAt: ["$delivered_orders.count", 0],
-				},
-			},
-		},
-	];
-
-	const data = await Order.aggregate(aggregation_pipeline);
-
-	return data[0];
-};
-
-// ! CHANGE TO UTILS
-// const isPhysicalStatus = (status) => ["PLACED", "CONFIRMED", "PACKED", "SHIPPED", "DELIVERED", "RETURNED"].includes(status);
-
-export const updateOrderStatusService = async (orderId, newStatus, description) => {
-
-    // * throwing error is status is done by the user
-	if (["RETURN_REQUESTED", ].includes(newStatus))
-		throw new ErrorWithStatus("Cannot set the specfic Status", HTTP_RES.BAD_REQUEST);
-
-	const existingOrder = await Order.findById(orderId);
-
-	if (!existingOrder) throw new ErrorWithStatus("Order Not Found ", HTTP_RES.NOT_FOUND);
-
-	const currentStatus = existingOrder.status_history.slice(-1)[0].status;
-
-	const allowedTransitions = STATUS_TRANSITIONS[currentStatus];
-
-	if (!allowedTransitions.includes(newStatus)) throw new ErrorWithStatus("Invalid Status Transition", HTTP_RES.CONFLICT);
-
-    if(existingOrder.payment_method === 'RAZORPAY' && existingOrder.payment_status !== 'PAID') throw new ErrorWithStatus("Cannot continue without user paying", HTTP_RES.BAD_REQUEST)
-
-	const updates = {
-		$push: {},
-	};
-
-    // * no cancellation requested
-	// here admin is denying request by selecting another status
-	// if (currentStatus === "CANCELLATION_REQUESTED" && isPhysicalStatus(newStatus)) {
-	// 	updates.$push.status_history = {
-	// 		$each: [
-	// 			{
-	// 				status: "CANCELLATION_DENIED",
-	// 				description: `Cancellation request denied reason : ${description}, process continued to ${newStatus}`,
-	// 			},
-	// 		],
-	// 	};
-
-	// 	const statusBeforeRequest = existingOrder.status_history.slice(-2)[0].status;
-
-	// 	const flowCheckTransition = STATUS_TRANSITIONS[statusBeforeRequest];
-	// 	if (isPhysicalStatus(newStatus) && !flowCheckTransition.includes(newStatus)) {
-	// 		throw new ErrorWithStatus("Invalid Denial Transition, cannot jump from " + statusBeforeRequest + " to " + newStatus, HTTP_RES.CONFLICT);
-	// 	}
-	// }
-
-
-	const newStatusEntry = {
-		status: newStatus,
-		description: description,
-	};
-
-
-	if (Array.isArray(updates.$push.status_history?.$each)) {
-		updates.$push.status_history.$each.push(newStatusEntry);
-	} else {
-		updates.$push.status_history = newStatusEntry;
-	}
-
-	if (newStatus === "DELIVERED" && existingOrder.payment_method === "COD") {
-		updates.$set = { payment_status: "PAID" };
-	}
-
-    if(newStatus === 'DELIVERED'){
-            await OrderItem.updateMany({order_id : existingOrder._id},{status : "DELIVERED" })
+    if (status !== "ALL") {
+        where.status = status;
     }
 
-    // * admin can't cancel
-    //  if order is cancelled refunding the amount to wallet if paid
-    // if (newStatus === "CANCELLED") {
-	// 	updates.$set = updates.$set || {};
-	// 	if (existingOrder.payment_status === "PAID") {
-	// 		updates.$set.payment_status = "REFUNDED";
-	// 		newStatusEntry.description = description || "Order cancelled by admin , Initiating refund";
-	// 		await Wallet.findOneAndUpdate({ user_id: existingOrder.user_id }, { $inc: { balance: existingOrder.total_amount } });
-	// 		await Transaction.create({ order_id: existingOrder._id, type: "refund", user_id: existingOrder.user_id, amount: existingOrder.total_amount });
-	// 	} else if (["PENDING", "PROCESSING"].includes(existingOrder.payment_status)) {
-	// 		updates.$set.payment_status = "CANCELLED";
-	// 		newStatusEntry.description = description || "Order cancelled by admin, payment halted";
-	// 	}
-	// }
+    if (search) {
+        where.OR = [
+            { order_number: { contains: search, mode: "insensitive" } },
+            { user: { email: { contains: search, mode: "insensitive" } } },
+            { user: { first_name: { contains: search, mode: "insensitive" } } },
+        ];
+    }
 
-    // * if order returned refunding the amount if paid
-	if (newStatus === "RETURNED") {
-		updates.$set = updates.$set || {};
-		if (existingOrder.payment_status === "PAID") {
-			updates.$set.payment_status = "REFUNDED";
-			await Wallet.findOneAndUpdate({ user_id: existingOrder.user_id }, { $inc: { balance: existingOrder.total_amount } });
-			await Transaction.create({ order_id: existingOrder._id, type: "refund", user_id: existingOrder.user_id, amount: existingOrder.total_amount });
-            const orderItems= await OrderItem.find({order_id : existingOrder._id}).lean()
-            await Promise.all(orderItems.map(x =>  ProductVariant.updateOne({_id : x.variant_id },  {$inc : { stock : x.quantity }})))
-            await OrderItem.updateMany({order_id : existingOrder._id},{is_returned : true , status : "RETURNED"})
-			newStatusEntry.description = description || "Return approved";
-		} else {
-			updates.$set.payment_status = "CANCELLED";
-			newStatusEntry.description = description || "Return Processed";
-		}
-		updates.$set.total_amount = 0;
-	}
+    const [data, total, deliveredCount] = await Promise.all([
+        prisma.order.findMany({
+            where,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        first_name: true,
+                        last_name: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+                items: {
+                    select: {
+                        id: true,
+                        product_name: true,
+                        product_image: true,
+                        price: true,
+                        quantity: true,
+                        total: true,
+                    },
+                },
+                shipping_address: true,
+                coupon: { select: { id: true, code: true, type: true, value: true } },
+            },
+            orderBy: { [sortBy]: order },
+            skip:    limit * (page - 1),
+            take:    limit,
+        }),
+        prisma.order.count({ where }),
+        prisma.order.count({ where: { deletedAt: null, status: "DELIVERED" } }),
+    ]);
 
-	return await Order.findByIdAndUpdate(orderId, updates, {
-		new: true,
-		runValidators: true,
-	});
+    // Shape data to match what the frontend expects
+    const shaped = data.map((o) => ({
+        ...o,
+        id:            o.id,
+        customer:      `${o.user?.first_name ?? ""} ${o.user?.last_name ?? ""}`.trim() || "Unknown",
+        email:         o.user?.email ?? "",
+        itemsCount:    o.items?.length ?? 0,
+        totalAmount:   o.total_amount,
+        paymentMethod: o.payment_method,
+        paymentStatus: o.payment_status,
+        status:        o.status,
+        createdAt:     o.createdAt,
+    }));
+
+    return {
+        data: shaped,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+        total_orders:     total,
+        delivered_orders: deliveredCount,
+    };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET SINGLE ORDER  (admin — full detail)
+// ─────────────────────────────────────────────────────────────────────────────
+export const getOrderService = async (id) => {
+    const order = await prisma.order.findUnique({
+        where: { id, deletedAt: null },
+        include: {
+            user: {
+                select: { id: true, first_name: true, last_name: true, email: true, phone: true },
+            },
+            items: {
+                include: {
+                    product: {
+                        select: { id: true, name: true, images: true },
+                    },
+                    variant: true,
+                },
+            },
+            shipping_address: true,
+            coupon:           true,
+            transaction:      true,
+        },
+    });
+
+    if (!order) {
+        throw new ErrorWithStatus("Order not found", HTTP_RES.NOT_FOUND);
+    }
+
+    return order;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UPDATE ORDER STATUS  (admin — with transition validation)
+// ─────────────────────────────────────────────────────────────────────────────
+export const updateOrderStatusService = async (orderId, newStatus, description) => {
+    // Statuses that only the user can set
+    if (["RETURN_REQUESTED"].includes(newStatus)) {
+        throw new ErrorWithStatus("Cannot manually set this status", HTTP_RES.BAD_REQUEST);
+    }
+
+    const existingOrder = await prisma.order.findUnique({
+        where: { id: orderId, deletedAt: null },
+        include: { items: true, transaction: true },
+    });
+    if (!existingOrder) throw new ErrorWithStatus("Order not found", HTTP_RES.NOT_FOUND);
+
+    const currentStatus    = existingOrder.status;
+    const allowedNextSteps = [
+        ...(STATUS_TRANSITIONS[currentStatus] ?? []),
+        "CANCELLED",
+    ];
+
+    if (process.env.NODE_ENV === "production" && !allowedNextSteps.includes(newStatus)) {
+        throw new ErrorWithStatus(
+            `Cannot transition order from "${currentStatus}" to "${newStatus}"`,
+            HTTP_RES.CONFLICT
+        );
+    }
+
+    if (
+        process.env.NODE_ENV === "production" &&
+        existingOrder.payment_method === "RAZORPAY" &&
+        existingOrder.payment_status !== "PAID"
+    ) {
+        throw new ErrorWithStatus(
+            "Cannot advance order status until payment is confirmed",
+            HTTP_RES.BAD_REQUEST
+        );
+    }
+
+    const existingHistory = Array.isArray(existingOrder.status_history)
+        ? existingOrder.status_history
+        : [];
+
+    // Build the update payload
+    const updateData = {
+        status: newStatus,
+        status_history: [
+            ...existingHistory,
+            { status: newStatus, description: description ?? "", timestamp: new Date().toISOString() },
+        ],
+    };
+
+    // Mark COD as PAID on delivery
+    if (newStatus === "DELIVERED" && existingOrder.payment_method === "COD") {
+        updateData.payment_status = "PAID";
+    }
+
+    // Handle returns — refund to wallet
+    if (newStatus === "RETURNED" && existingOrder.payment_status === "PAID") {
+        updateData.payment_status = "REFUNDED";
+        // Credit wallet
+        await prisma.wallet.upsert({
+            where:  { user_id: existingOrder.user_id },
+            update: { balance: { increment: existingOrder.total_amount } },
+            create: { user_id: existingOrder.user_id, balance: existingOrder.total_amount },
+        });
+        // Log transaction
+        const wallet = await prisma.wallet.findUnique({ where: { user_id: existingOrder.user_id } });
+        if (wallet) {
+            await prisma.transaction.create({
+                data: {
+                    wallet_id:    wallet.id,
+                    type:         "CREDIT",
+                    reason:       "ORDER_REFUND",
+                    amount:       existingOrder.total_amount,
+                    balanceAfter: wallet.balance + existingOrder.total_amount,
+                    description:  `Refund for returned order ${existingOrder.order_number}`,
+                },
+            });
+        }
+    }
+
+    return prisma.order.update({
+        where: { id: orderId },
+        data:  updateData,
+        include: {
+            user:  { select: { id: true, first_name: true, last_name: true, email: true } },
+            items: true,
+        },
+    });
 };

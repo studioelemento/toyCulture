@@ -1,5 +1,4 @@
-import { Address } from "../models/address.model.js";
-import { User } from "../models/user.model.js";
+import { prisma } from "../config/prisma.js";
 import {
     addAddressService,
     changeEmailService,
@@ -15,20 +14,27 @@ import {
     changePasswordValidator,
     emailValidator,
 } from "../validators/userValidator.js";
-import { Coupon } from "../models/coupon.model.js";
 import { HTTP_RES } from "../utils/CONSTANTS.js";
+import ErrorWithStatus from "../config/ErrorWithStatus.js";
 
 export const editPrfileController = async (req, res, next) => {
     try {
         const { value, error } = editProfileValidator(req.body);
         if (error) {
-            throw error;
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const email = req.email;
-        const uploadUrl = await uploadImages(req, "user");
+        const email = req.email || req.user?.email;
+        let uploadUrl = [];
+        if (req.files && req.files.length > 0) {
+            uploadUrl = await uploadImages(req, "user");
+        }
         const result = await editProfileService(value, email, uploadUrl[0]);
 
-        res.status(200).json({ status: "success", data: result ,message : "Profile Editted Successfully"});
+        res.status(200).json({
+            status:  "success",
+            data:    result,
+            message: "Profile updated successfully",
+        });
     } catch (error) {
         next(error);
     }
@@ -38,15 +44,15 @@ export const changeEmailController = async (req, res, next) => {
     try {
         const { value, error } = emailValidator(req.body);
         if (error) {
-            throw error;
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const currentUser = req.email;
+        const currentUser = req.email || req.user?.email;
         const result = await changeEmailService(value.email, currentUser);
 
         return res.status(200).json({
-            message: "OTP sent successfuly",
-            status: "success",
-            data: result,
+            message: "OTP sent successfully",
+            status:  "success",
+            data:    result,
         });
     } catch (error) {
         next(error);
@@ -57,9 +63,9 @@ export const changePasswordController = async (req, res, next) => {
     try {
         const { value, error } = changePasswordValidator(req.body);
         if (error) {
-            throw error;
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const currentUser = req.email;
+        const currentUser = req.email || req.user?.email;
         await changePasswordService(
             value.password,
             value.old_password,
@@ -68,7 +74,7 @@ export const changePasswordController = async (req, res, next) => {
 
         return res.status(200).json({
             message: "Password changed successfully",
-            status: "success",
+            status:  "success",
         });
     } catch (error) {
         next(error);
@@ -79,18 +85,16 @@ export const addAddressController = async (req, res, next) => {
     try {
         const { value, error } = addressValidator(req.body);
         if (error) {
-            throw error;
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const currentUser = req.email;
+        const currentUser = req.email || req.user?.email;
         const result = await addAddressService(value, currentUser);
 
-        return res
-            .status(201)
-            .json({
-                data: result,
-                message: "Address Created Successfuly",
-                status: "success",
-            });
+        return res.status(201).json({
+            data:    result,
+            message: "Address created successfully",
+            status:  "success",
+        });
     } catch (error) {
         next(error);
     }
@@ -98,19 +102,22 @@ export const addAddressController = async (req, res, next) => {
 
 export const getAllAddressController = async (req, res, next) => {
     try {
-        const currentUser = req.email;
-        const user = await User.findOne({ email: currentUser });
+        const currentUser = req.email || req.user?.email;
+        const user = await prisma.user.findUnique({ where: { email: currentUser } });
         if (!user) {
-            throw new Error("User not found ");
+            throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
         }
-        const addresses = await Address.find({ user_id: user._id });
-        return res
-            .status(200)
-            .json({
-                data: addresses,
-                message: "Address Recieved Successfully",
-                status: "success",
-            });
+
+        const addresses = await prisma.address.findMany({
+            where:   { user_id: user.id },
+            orderBy: [{ is_primary: "desc" }, { createdAt: "desc" }],
+        });
+
+        return res.status(200).json({
+            data:    addresses,
+            message: "Addresses retrieved successfully",
+            status:  "success",
+        });
     } catch (error) {
         next(error);
     }
@@ -118,23 +125,26 @@ export const getAllAddressController = async (req, res, next) => {
 
 export const getAddressController = async (req, res, next) => {
     try {
-        const currentUser = req.email;
+        const currentUser = req.email || req.user?.email;
         const { id } = req.params;
-        const user = await User.findOne({ email: currentUser });
+        const user = await prisma.user.findUnique({ where: { email: currentUser } });
         if (!user) {
-            throw new Error("Invalid Request");
+            throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
         }
-        const address = await Address.findById(id);
-        if (!address.user_id.equals(user._id)) {
-            throw new Error("Un authorized");
+
+        const address = await prisma.address.findFirst({
+            where: { id, user_id: user.id },
+        });
+
+        if (!address) {
+            throw new ErrorWithStatus("Address not found", HTTP_RES.NOT_FOUND);
         }
-        return res
-            .status(200)
-            .json({
-                message: "Address Received Successfuly",
-                data: address,
-                status: "success",
-            });
+
+        return res.status(200).json({
+            message: "Address retrieved successfully",
+            data:    address,
+            status:  "success",
+        });
     } catch (error) {
         next(error);
     }
@@ -143,24 +153,26 @@ export const getAddressController = async (req, res, next) => {
 export const deleteAddressController = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const currentUser = req.email;
-        const user = await User.findOne({ email: currentUser });
-        const address = await Address.findOne({ _id: id });
-        console.log(address.user_id.equals(user._id));
-        if (!address) {
-            throw new Error("Invalid Address");
+        const currentUser = req.email || req.user?.email;
+        const user = await prisma.user.findUnique({ where: { email: currentUser } });
+        if (!user) {
+            throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
         }
-        if (!address.user_id.equals(user._id)) {
-            throw new Error("Not Allowed");
-        }
-        await Address.deleteOne({ _id: id });
 
-        return res
-            .status(200)
-            .json({
-                message: "Address deleted Successfully",
-                status: "success",
-            });
+        const address = await prisma.address.findFirst({
+            where: { id, user_id: user.id },
+        });
+
+        if (!address) {
+            throw new ErrorWithStatus("Address not found", HTTP_RES.NOT_FOUND);
+        }
+
+        await prisma.address.delete({ where: { id } });
+
+        return res.status(200).json({
+            message: "Address deleted successfully",
+            status:  "success",
+        });
     } catch (error) {
         next(error);
     }
@@ -168,46 +180,53 @@ export const deleteAddressController = async (req, res, next) => {
 
 export const editAddressController = async (req, res, next) => {
     try {
-
-          const {value , error} = addressValidator(req.body)
-          console.log(888)
-        if(error){
-            throw error
+        const { value, error } = addressValidator(req.body);
+        if (error) {
+            throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const currentUser = req.email;
+        const currentUser = req.email || req.user?.email;
         const { id } = req.params;
-        console.log(req.body)
-    const address = await editAddressService(id , currentUser , value)
-        return res.status(200).json({message : "Address Updated Successfully", data : address, status : 'success'})
+        const address = await editAddressService(id, currentUser, value);
+
+        return res.status(200).json({
+            message: "Address updated successfully",
+            data:    address,
+            status:  "success",
+        });
     } catch (error) {
         next(error);
     }
 };
 
-export const setToPrimaryAddressController = async(req, res, next) => {
+export const setToPrimaryAddressController = async (req, res, next) => {
     try {
-        const currentUser = req.email
-        const {id} = req.params
+        const currentUser = req.email || req.user?.email;
+        const { id } = req.params;
+        const address = await setToPrimaryAddressService(currentUser, id);
 
-        const address = await setToPrimaryAddressService(currentUser , id)
-
-        return res.status(200).json({message : "Address set as primary successful", data : address , status: "success"})
+        return res.status(200).json({
+            message: "Address set as primary successfully",
+            data:    address,
+            status:  "success",
+        });
     } catch (error) {
-
-        next(error)
+        next(error);
     }
-}
+};
 
-
-export const getCouponsController = async(req, res, next) => {
+export const getCouponsController = async (_req, res, next) => {
     try {
-        const user = req.user._id
+        const coupons = await prisma.coupon.findMany({
+            where:   { is_active: true, valid_until: { gt: new Date() } },
+            orderBy: { value: "desc" },
+        });
 
-        console.log(user)
-        const coupons = await Coupon.find({for_user : user.toString(), is_active : true})
-        console.log(coupons)
-        return res.status(HTTP_RES.OK).json({message : "Coupon Recieved Successfully",data : coupons , status : "success"})
+        return res.status(HTTP_RES.OK).json({
+            message: "Coupons retrieved successfully",
+            data:    coupons,
+            status:  "success",
+        });
     } catch (error) {
-        next(error)
+        next(error);
     }
-}
+};

@@ -1,210 +1,214 @@
-import mongoose from "mongoose";
-import { User } from "../../models/user.model.js";
-import { Order } from "../../models/order.model.js";
-import { ProductVariant } from "../../models/product_variants.model.js";
-import { OrderItem } from "../../models/order_item.model.js";
-import { Cart } from "../../models/cart.model.js";
-import { Coupon } from "../../models/coupon.model.js";
+import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
-import { CouponUsage } from "../../models/coupon_usage.model.js";
-import { Transaction } from "../../models/transaction.model.js";
-import { razorpay } from "../../config/razorpay.js";
-import { Wallet } from "../../models/wallet.model.js";
-import { toFixedNum } from "../../utils/toFixedNum.js";
 
-export const createOrderService = async (currentUser, orderData) => {
-	const session = await mongoose.startSession();
-	session.startTransaction();
-	try {
-		const user = await User.findOne({ email: currentUser }).session(session);
-		if (!user) {
-			throw new Error("Unauthorized");
-		}
-		let coupon = null;
-		// * coupon validations
-		if (orderData.coupon_code && orderData.coupon_code.length > 1) {
-			coupon = await Coupon.findOne({ code: orderData.coupon_code });
-			if (!coupon) throw new ErrorWithStatus("Coupon not found", HTTP_RES.NOT_FOUND);
-			if (coupon.expiry_date < new Date()) throw new ErrorWithStatus("Coupon Expired", HTTP_RES.BAD_REQUEST);
-			if (coupon.for_user && !user._id.equals(coupon.for_user))
-				throw new ErrorWithStatus("User Not authorized to use the coupon", HTTP_RES.UNAUTHORIZED);
-			const couponUsageCount = await CouponUsage.find({ coupon_id: coupon._id }).countDocuments();
-			console.log(couponUsageCount, 44565);
-			 await CouponUsage.find({
-				coupon_id: coupon._id,
-				user_id: user._id,
-			}).countDocuments();
-			if (couponUsageCount >= coupon.usage_limit)
-				throw new ErrorWithStatus("Coupon can't be used", HTTP_RES.UNPROCESSABLE_ENTITY);
-			// ! TODO UNCOMMENT
-			// if (userCouponUsage !== 0) throw new ErrorWithStatus("Coupon Already Used by user", HTTP_RES.CONFLICT);
-		}
-		// * creating new order
-		const order = new Order({
-			payment_method: orderData.payment_method,
-			shipping_address_id: orderData.shipping_address_id,
-			coupon_id: coupon?._id,
-			user_id: user._id,
-		});
+export const createOrderService = async (currentUserEmail, orderData) => {
+    // 1. Resolve User
+    const user = await prisma.user.findUnique({
+        where: { email: currentUserEmail },
+    });
+    if (!user) {
+        throw new ErrorWithStatus("User not authenticated", HTTP_RES.UNAUTHORIZED);
+    }
 
-		const orderItems = [];
-		let total_amount = 0;
-		// * creating order items
-		for (const item of orderData.order_items) {
-			const variant = await ProductVariant.findById(item.variant_id)
-				.populate({
-					path: "product_id",
-					populate: {
-						path: "category_id",
-						select: "is_active discount",
-					},
-					select: "is_active name price discount",
-				})
-				.lean();
-			const product = variant.product_id;
-			const category = product.category_id;
-			if (!variant || !product.is_active || !category.is_active) {
-				throw new Error("Variant not available");
-			}
-			if (variant.stock < item.quantity) {
-				throw new Error("Insufficient Quantity");
-			}
-			console.log(1);
-			const [orderItem] = await OrderItem.create(
-				[
-					{
-						order_id: order._id,
-						variant_id: item.variant_id,
-						quantity: item.quantity,
-						price: product.price,
-						discount:
-							product.discount < category.discount
-								? category.discount
-								: product.discount,
-						payment_status: "PENDING",
-					},
-				],
-				{ session }
-			);
-			console.log(2);
-			orderItems.push(orderItem);
+    // 2. Resolve Shipping Address
+    let addressId = orderData.shipping_address_id;
+    if (!addressId) {
+        // Look for user's existing address or create a default one
+        const existingAddress = await prisma.address.findFirst({
+            where: { user_id: user.id },
+            orderBy: { is_primary: "desc" },
+        });
 
+        if (existingAddress) {
+            addressId = existingAddress.id;
+        } else {
+            const ship = orderData.shipping_address || {};
+            const newAddress = await prisma.address.create({
+                data: {
+                    user_id:      user.id,
+                    first_name:   ship.name?.split(" ")[0] || user.first_name || "Customer",
+                    last_name:    ship.name?.split(" ")[1] || user.last_name || "Name",
+                    phone:        ship.phone || user.phone || "+91 9999999999",
+                    address:      ship.addressLine1 || ship.address || "123 Toy Street",
+                    place:        ship.city || "Bangalore",
+                    pincode:      ship.pin || ship.pincode || "560001",
+                    state:        ship.state || "Karnataka",
+                    address_type: ship.type || "Home",
+                    is_primary:   true,
+                },
+            });
+            addressId = newAddress.id;
+        }
+    }
 
+    // 3. Process Order Items & Calculate Totals
+    const itemDetails = [];
+    let subtotal = 0;
 
-			// ! removing from cart
-			// TODO Should i remove the number of quantity order or the full
-			// * Removing the item from cart
-			await Cart.findOneAndDelete({
-				user_id: user._id,
-				variant_id: item.variant_id,
-			});
+    for (const item of orderData.order_items) {
+        const pId = item.product_id || item.id || item.variant_id;
+        const qty = Number(item.quantity) || 1;
 
-			// * Removing the quantity from the inventory
-			// * if razorpay don't reduce the quantity
-			if (orderData.payment_method !== "RAZORPAY") {
-				await ProductVariant.findByIdAndUpdate(
-					item.variant_id,
-					{ $inc: { stock: -item.quantity } },
-					{ session, new: true }
-				);
-			}
-			total_amount += product.price * (1 - orderItem.discount / 100) * item.quantity;
-			console.log(orderItems);
-		}
+        // Try finding Product directly
+        let product = await prisma.product.findUnique({ where: { id: pId } });
 
-		// * calculating total
-		order.delivery_fee = 15;
+        // If not product, try finding by variant
+        let variant = null;
+        if (!product) {
+            variant = await prisma.productVariant.findUnique({
+                where:   { id: pId },
+                include: { product: true },
+            });
+            if (variant) {
+                product = variant.product;
+            }
+        }
 
-		let payable_amount = toFixedNum(total_amount);
-		console.log(payable_amount);
-		if (coupon) {
-			const discountValue = Math.min(
-				total_amount * (coupon?.discount_percentage / 100),
-				coupon?.max_discount_amount
-			);
-			payable_amount -= toFixedNum(discountValue);
-		}
-		console.log(payable_amount);
-		order.total_amount = toFixedNum(payable_amount + order.delivery_fee);
+        if (!product || !product.is_active || product.deletedAt) {
+            throw new ErrorWithStatus(`Product ${pId} not available`, HTTP_RES.BAD_REQUEST);
+        }
 
-        if (order.payment_method === "COD" && order.total_amount > 1000)
-				throw new ErrorWithStatus(
-					"Cannot do COD if total amount is less than 1000",
-					HTTP_RES.BAD_REQUEST
-				);
+        const effectivePrice = product.sellingPrice ?? product.price;
+        const lineTotal = effectivePrice * qty;
+        subtotal += lineTotal;
 
-		order.status_history = [{ status: "PLACED", description: "none" }];
+        const rawImages = Array.isArray(product.images) ? product.images : [];
+        const firstImg = rawImages[0];
+        const imageUrl = typeof firstImg === "string" ? firstImg : firstImg?.url || "";
 
-		// * saving coupon usage instance
-		if (coupon) {
-			await CouponUsage.create([{ user_id: user._id, coupon_id: coupon._id, order_id: order._id }], {
-				session,
-			});
-		}
-		// TODO :  PENDING : MAKE THE SAME FOR COD AND WALLET
-		let razorpay_order = null;
-		let transaction = null;
-		console.log(order.total_amount, 778);
-		if (orderData.payment_method === "RAZORPAY") {
-			const razorpay_option = {
-				amount: order.total_amount * 100,
-				currency: "INR",
-				receipt: order._id,
-			};
-			razorpay_order = await razorpay.orders.create(razorpay_option);
+        itemDetails.push({
+            productId:    product.id,
+            variantId:    variant?.id || null,
+            productName:  product.name,
+            productImage: imageUrl,
+            price:        effectivePrice,
+            quantity:     qty,
+            total:        lineTotal,
+        });
+    }
 
-			transaction = await Transaction.create(
-				[
-					{
-						user_id: user._id,
-						order_id: order._id,
-						type: "debit",
-						amount: order.total_amount,
-						status: "PENDING",
-						razorpay_order_id: razorpay_order.id,
-						description: `Payment initiated for ${order._id}`,
-					},
-				],
-				{ session }
-			);
-		} else if (orderData.payment_method === "WALLET") {
-			const wallet = await Wallet.findOne({ user_id: user._id });
-			if (wallet.balance < order.total_amount)
-				throw new ErrorWithStatus("Insufficient Balance", HTTP_RES.BAD_REQUEST);
+    // 4. Validate Coupon
+    let couponRecord = null;
+    let discountAmount = 0;
+    if (orderData.coupon_code) {
+        const coupon = await prisma.coupon.findUnique({
+            where: { code: orderData.coupon_code.trim().toUpperCase() },
+        });
 
-			wallet.balance -= order.total_amount;
-			transaction = await Transaction.create(
-				[
-					{
-						user_id: user._id,
-						order_id: order._id,
-						type: "debit",
-						amount: order.total_amount,
-						status: "SUCCESS",
-						description: "Payment done through wallet for " + order._id,
-					},
-				],
-				{ session }
-			);
+        if (coupon && coupon.is_active && new Date(coupon.valid_until) > new Date()) {
+            if (subtotal >= coupon.min_order_amount) {
+                if (coupon.type === "PERCENTAGE") {
+                    discountAmount = (subtotal * coupon.value) / 100;
+                    if (coupon.max_discount) {
+                        discountAmount = Math.min(discountAmount, coupon.max_discount);
+                    }
+                } else {
+                    discountAmount = coupon.value;
+                }
+                couponRecord = coupon;
+            }
+        }
+    }
 
-			await wallet.save({ session });
-			order.payment_status = "PAID";
-		}
+    const deliveryFee = subtotal >= 1000 ? 0 : 50;
+    const finalTotal = Math.max(0, subtotal - discountAmount + deliveryFee);
 
-		console.log(transaction, 121);
-		order.transaction_id = transaction?.[0]?._id;
+    // Normalize payment method to enum (COD, RAZORPAY, WALLET)
+    let paymentMethodEnum = "COD";
+    if (orderData.payment_method === "WALLET") paymentMethodEnum = "WALLET";
+    else if (["RAZORPAY", "UPI", "CARD", "ONLINE"].includes(orderData.payment_method?.toUpperCase())) {
+        paymentMethodEnum = "RAZORPAY";
+    }
 
-		await order.save({ session });
+    // 5. Execute Order Placement in Atomic Transaction
+    const newOrder = await prisma.$transaction(async (tx) => {
+        // If WALLET payment, verify and deduct balance
+        if (paymentMethodEnum === "WALLET") {
+            const wallet = await tx.wallet.findUnique({ where: { user_id: user.id } });
+            if (!wallet || wallet.balance < finalTotal) {
+                throw new ErrorWithStatus("Insufficient wallet balance", HTTP_RES.BAD_REQUEST);
+            }
+            await tx.wallet.update({
+                where: { user_id: user.id },
+                data:  { balance: wallet.balance - finalTotal },
+            });
+            await tx.transaction.create({
+                data: {
+                    wallet_id:    wallet.id,
+                    type:         "DEBIT",
+                    reason:       "ORDER_PAYMENT",
+                    amount:       finalTotal,
+                    balanceAfter: wallet.balance - finalTotal,
+                    description:  `Payment for order`,
+                },
+            });
+        }
 
-		await session.commitTransaction();
-		if (razorpay_order) return { order, razorpay_order };
-		return { order };
-	} catch (error) {
-		await session.abortTransaction();
-		console.log(error);
-		throw error;
-	} finally {
-		session.endSession();
-	}
+        // Deduct product stock
+        for (const item of itemDetails) {
+            await tx.product.update({
+                where: { id: item.productId },
+                data:  { stockQTY: { decrement: item.quantity } },
+            });
+            if (item.variantId) {
+                await tx.productVariant.update({
+                    where: { id: item.variantId },
+                    data:  { stock: { decrement: item.quantity } },
+                });
+            }
+        }
+
+        // Create Order
+        const createdOrder = await tx.order.create({
+            data: {
+                user_id:             user.id,
+                shipping_address_id: addressId,
+                coupon_id:           couponRecord?.id || null,
+                total_amount:        finalTotal,
+                delivery_fee:        deliveryFee,
+                payment_method:      paymentMethodEnum,
+                payment_status:      paymentMethodEnum === "WALLET" ? "PAID" : "PENDING",
+                status:              "PLACED",
+                status_history: [
+                    { status: "PLACED", timestamp: new Date().toISOString(), note: "Order placed successfully" },
+                ],
+                items: {
+                    create: itemDetails.map((item) => ({
+                        product_id:    item.productId,
+                        variant_id:    item.variantId,
+                        product_name:  item.productName,
+                        product_image: item.productImage,
+                        price:         item.price,
+                        quantity:      item.quantity,
+                        total:         item.total,
+                    })),
+                },
+            },
+            include: {
+                items:            true,
+                shipping_address: true,
+                coupon:           true,
+            },
+        });
+
+        // Record coupon usage
+        if (couponRecord) {
+            await tx.coupon.update({
+                where: { id: couponRecord.id },
+                data:  { used_count: { increment: 1 } },
+            });
+            await tx.couponUsage.create({
+                data: {
+                    coupon_id: couponRecord.id,
+                    user_id:   user.id,
+                    order_id:  createdOrder.id,
+                },
+            });
+        }
+
+        return createdOrder;
+    });
+
+    return newOrder;
 };

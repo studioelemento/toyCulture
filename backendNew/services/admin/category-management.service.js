@@ -23,6 +23,7 @@ export const addCategoryService = async (value) => {
             name: value.name,
             parent_id: value.parent_id || null,
             seo_description: value.seo_description || null,
+            attributes: Array.isArray(value.attributes) ? value.attributes : [],
         },
         include: { parent: true },
     });
@@ -102,13 +103,18 @@ export const editCategoryService = async (id, data) => {
         throw new Error("Category cannot be its own parent");
     }
 
+    const updateData = {
+        name: data.name,
+        parent_id: data.parent_id || null,
+        seo_description: data.seo_description || null,
+    };
+    if (data.attributes !== undefined) {
+        updateData.attributes = Array.isArray(data.attributes) ? data.attributes : [];
+    }
+
     const updated = await prisma.category.update({
         where: { id },
-        data: {
-            name: data.name,
-            parent_id: data.parent_id || null,
-            seo_description: data.seo_description || null,
-        },
+        data: updateData,
         include: { parent: true, children: true },
     });
 
