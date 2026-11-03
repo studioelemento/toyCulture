@@ -22,7 +22,7 @@ Robust, scalable REST API powering the **ToyCulture** e-commerce platform and it
 ```text
 backendNew/
 ├── prisma/
-│   └── schema.prisma          # Prisma schema definition (PostgreSQL)
+│   └── schema.prisma          # Prisma schema definition (PostgreSQL & Dynamic Category Attributes)
 ├── controllers/
 │   ├── admin/                 # Admin controllers (brands, categories, products, orders, etc.)
 │   ├── user/                  # Customer-facing controllers (checkout, order, wishlist, etc.)

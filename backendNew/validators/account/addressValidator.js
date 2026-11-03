@@ -1,8 +1,7 @@
 import Joi from "joi";
 import { validator } from "../validator.js";
 
-
-const namePattern = /^[A-Za-z\s]+$/; // only letters and spaces
+const namePattern = /^[A-Za-z\s]+$/;
 
 export const addressSchema = Joi.object({
   first_name: Joi.string()
@@ -70,24 +69,23 @@ export const addressSchema = Joi.object({
   address_type: Joi.string()
     .required()
     .messages({
-
       "string.empty": "Address type is required",
     }),
 
   landmark: Joi.string()
     .allow("")
     .max(100)
-    .messages({
-      "string.max": "Landmark must be at most {#limit} characters",
-    }),
+    .optional(),
+
   pincode: Joi.string()
     .pattern(/^[0-9]{5,6}$/)
     .required()
     .messages({
       "string.empty": "Pincode is required",
-      "string.pattern.base": "Pincode must be 6 digits only",
-    }),  // user_id will be validated separately (from auth or route param)
-});
+      "string.pattern.base": "Pincode must be 5-6 digits only",
+    }),
 
+  is_primary: Joi.boolean().optional(),
+}).unknown(true);
 
-export const addressValidator = validator(addressSchema)
+export const addressValidator = validator(addressSchema);
