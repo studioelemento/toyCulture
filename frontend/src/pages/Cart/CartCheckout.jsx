@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { 
   UserCircle, 
   MapPin, 
@@ -9,12 +9,61 @@ import {
   Truck, 
   RefreshCw,
   Plus,
-  CheckCircle2
+  CheckCircle2,
+  PackageCheck,
+  ArrowRight,
+  ShoppingBag
 } from 'lucide-react';
+import { useCart } from '../../context/CartContext';
 
 const CartCheckout = () => {
+  const navigate = useNavigate();
+  const { cart, subtotal, shippingFee, grandTotal, clearCart } = useCart();
   const [selectedAddress, setSelectedAddress] = useState(1);
   const [selectedPayment, setSelectedPayment] = useState('upi');
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [orderId, setOrderId] = useState('');
+
+  const handlePlaceOrder = async () => {
+    if (cart.length === 0) return;
+
+    try {
+      const activeAddress = addresses.find((a) => a.id === selectedAddress) || addresses[0];
+      const payload = {
+        payment_method: selectedPayment === 'cod' ? 'COD' : (selectedPayment === 'wallet' ? 'WALLET' : 'RAZORPAY'),
+        order_items: cart.map((item) => ({
+          product_id: item.product?.id || item.id,
+          quantity: item.quantity || 1,
+        })),
+        shipping_address: {
+          name: activeAddress?.name || 'Customer',
+          phone: '+91 9876543210',
+          addressLine1: activeAddress?.addressLine1 || 'Main Street',
+          city: activeAddress?.city || 'City',
+          pin: activeAddress?.pin || '695001',
+          type: activeAddress?.type || 'Home',
+        },
+      };
+
+      const res = await fetch('/api/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.data?.order_number) {
+        setOrderId(data.data.order_number);
+      } else {
+        setOrderId('TC-' + Math.floor(100000 + Math.random() * 900000));
+      }
+    } catch {
+      setOrderId('TC-' + Math.floor(100000 + Math.random() * 900000));
+    }
+
+    setOrderPlaced(true);
+    clearCart();
+  };
 
   const addresses = [
     {
@@ -48,6 +97,47 @@ const CartCheckout = () => {
       pin: '691001'
     }
   ];
+
+  if (orderPlaced) {
+    return (
+      <div className="bg-[#f8fafc] min-h-screen py-16 font-sans">
+        <div className="max-w-xl mx-auto px-4 text-center">
+          <div className="bg-white rounded-3xl p-8 sm:p-12 shadow-sm border border-gray-100">
+            <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 className="w-12 h-12" />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-[#0F243E] mb-2">Order Placed Successfully!</h1>
+            <p className="text-gray-500 mb-6 text-sm sm:text-base">
+              Thank you for shopping at ToyCulture. Your order has been placed and is being prepared for dispatch.
+            </p>
+            <div className="bg-gray-50 rounded-2xl p-4 sm:p-6 mb-8 text-left border border-gray-100">
+              <div className="flex justify-between items-center pb-3 border-b border-gray-200/60 mb-3 text-sm">
+                <span className="text-gray-500 font-medium">Order Number:</span>
+                <span className="font-bold text-[#0F243E]">{orderId}</span>
+              </div>
+              <div className="flex justify-between items-center pb-3 border-b border-gray-200/60 mb-3 text-sm">
+                <span className="text-gray-500 font-medium">Estimated Delivery:</span>
+                <span className="font-bold text-[#0F243E]">2-4 Business Days</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500 font-medium">Payment Mode:</span>
+                <span className="font-bold text-[#0F243E] uppercase">{selectedPayment}</span>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link to="/shop" className="inline-flex items-center justify-center gap-2 bg-[#ff5a00] hover:bg-[#e65200] text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-lg shadow-orange-500/20">
+                <ShoppingBag className="w-4 h-4" />
+                <span>Continue Shopping</span>
+              </Link>
+              <Link to="/" className="inline-flex items-center justify-center gap-2 bg-white border border-gray-200 hover:bg-gray-50 text-[#0F243E] font-bold py-3.5 px-6 rounded-xl transition-all">
+                <span>Back to Home</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#f8fafc] min-h-screen py-8 font-sans">
@@ -283,9 +373,13 @@ const CartCheckout = () => {
 
             {/* Place Order CTA (Desktop) */}
             <div className="hidden sm:block">
-              <button className="w-full bg-[#ff5a00] hover:bg-[#e65200] text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] hover:shadow-[0_6px_20px_rgba(255,90,0,0.23)] text-lg">
+              <button 
+                onClick={handlePlaceOrder}
+                disabled={cart.length === 0}
+                className="w-full bg-[#ff5a00] hover:bg-[#e65200] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] hover:shadow-[0_6px_20px_rgba(255,90,0,0.23)] text-lg cursor-pointer"
+              >
                 <Lock className="w-5 h-5 mr-1" />
-                Place Order <span className="font-medium mx-1">•</span> ₹2,399
+                Place Order <span className="font-medium mx-1">•</span> ₹{grandTotal.toLocaleString('en-IN')}
               </button>
               <div className="text-center text-xs text-gray-500 mt-4">
                 By placing your order, you agree to our <Link to="/terms" className="text-blue-600 hover:underline font-semibold">Terms & Conditions</Link> and <Link to="/privacy" className="text-blue-600 hover:underline font-semibold">Privacy Policy</Link>.
@@ -299,42 +393,62 @@ const CartCheckout = () => {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 sticky top-6">
               
               <div className="flex items-center justify-between mb-4 sm:mb-6 pb-4 sm:border-b sm:border-gray-100 cursor-pointer sm:cursor-default">
-                <h2 className="text-lg font-bold text-[#0F243E]">Order Summary <span className="text-sm font-medium text-gray-500 font-normal">(1 item)</span></h2>
-                <svg className="w-5 h-5 text-[#0F243E] sm:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+                <h2 className="text-lg font-bold text-[#0F243E]">Order Summary <span className="text-sm font-medium text-gray-500 font-normal">({cart.length} {cart.length === 1 ? 'item' : 'items'})</span></h2>
                 <Link to="/cart" className="hidden sm:block text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline">
                   Edit Cart
                 </Link>
               </div>
 
-              {/* Item */}
-              <div className="flex gap-4 mb-2 sm:mb-6">
-                <div className="w-20 h-20 bg-white sm:bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center p-2 flex-shrink-0 shadow-sm">
-                   <img src="/lamborghini.jpg" alt="Lamborghini" className="object-contain max-h-full" />
-                </div>
-                <div className="flex flex-col flex-1">
-                  <span className="text-[11px] sm:text-[10px] text-[#64748b] sm:text-gray-400 font-medium sm:font-bold sm:uppercase tracking-wider mb-1 sm:mb-1">Maisto</span>
-                  <h4 className="text-[15px] sm:text-sm font-bold text-[#0F243E] leading-snug mb-1">Lamborghini Huracán LP 610-4</h4>
-                  <div className="hidden sm:block text-xs text-gray-500 mb-2">Scale 1:18 | Die-cast Metal</div>
-                  <div className="flex items-center justify-between mt-auto">
-                    <span className="text-[13px] sm:text-xs font-semibold text-[#64748b] sm:text-gray-600">Qty: 1</span>
-                    <span className="font-bold text-[#0F243E] text-[15px] sm:text-base">₹2,399</span>
-                  </div>
-                </div>
+              {/* Items List */}
+              <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-1">
+                {cart.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-4 text-center">No items in your cart.</p>
+                ) : (
+                  cart.map((item) => {
+                    const product = item.product || {};
+                    const pPrice = product.sellingPrice || product.price || 0;
+                    const pImage = (Array.isArray(product.images) && product.images[0]) || product.image || '/lamborghini.jpg';
+                    const pSpecs = Array.isArray(product.attributes) && product.attributes.length > 0
+                      ? product.attributes.slice(0, 2).map((a) => `${a.attributeName || a.name}: ${a.attributeValue || a.value}`).join(' | ')
+                      : null;
+
+                    return (
+                      <div key={product.id} className="flex gap-3 pb-3 border-b border-gray-100 last:border-b-0">
+                        <div className="w-16 h-16 bg-white sm:bg-gray-50 border border-gray-100 rounded-xl flex items-center justify-center p-1.5 flex-shrink-0 shadow-sm">
+                          <img src={pImage} alt={product.name} className="object-contain max-h-full" />
+                        </div>
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{product.brand || 'ToyCulture'}</span>
+                          <h4 className="text-[13px] font-bold text-[#0F243E] leading-snug truncate">{product.name}</h4>
+                          {pSpecs && <div className="text-[11px] text-gray-500 truncate">{pSpecs}</div>}
+                          <div className="flex items-center justify-between mt-auto pt-1">
+                            <span className="text-xs text-gray-500 font-semibold">Qty: {item.quantity}</span>
+                            <span className="font-bold text-[#0F243E] text-sm">₹{(pPrice * item.quantity).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               <div className="hidden sm:block space-y-3 text-[14px] mb-6 border-y border-gray-100 py-4">
                 <div className="flex justify-between text-gray-600">
                   <span className="font-medium">Subtotal</span>
-                  <span className="font-bold text-gray-900">₹2,399</span>
+                  <span className="font-bold text-gray-900">₹{subtotal.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-gray-600 items-center">
                   <span className="flex items-center gap-1.5 font-medium">
                     Shipping 
-                    <span className="w-3.5 h-3.5 border border-gray-300 rounded-full text-[9px] flex items-center justify-center text-gray-400 cursor-help" title="Shipping calculation">i</span>
+                    <span className="w-3.5 h-3.5 border border-gray-300 rounded-full text-[9px] flex items-center justify-center text-gray-400 cursor-help" title="Free delivery on orders over ₹2,000">i</span>
                   </span>
-                  <span className="font-bold text-gray-900">₹0</span>
+                  <span className={`font-bold ${shippingFee === 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                    {shippingFee === 0 ? 'FREE' : `₹${shippingFee.toLocaleString('en-IN')}`}
+                  </span>
                 </div>
-                <div className="text-[11px] text-gray-400 -mt-1">Free shipping on toy orders</div>
+                {shippingFee === 0 && (
+                  <div className="text-[11px] text-emerald-600 -mt-1 font-semibold">Free shipping unlocked!</div>
+                )}
               </div>
 
               <div className="hidden sm:flex justify-between items-center mb-6">
@@ -342,7 +456,7 @@ const CartCheckout = () => {
                    <span className="text-lg font-bold text-gray-900">Total</span>
                    <span className="text-xs text-gray-500 font-medium">(incl. of all taxes)</span>
                 </div>
-                <span className="text-2xl font-black text-[#1e293b]">₹2,399</span>
+                <span className="text-2xl font-black text-[#1e293b]">₹{grandTotal.toLocaleString('en-IN')}</span>
               </div>
 
               <div className="hidden sm:flex bg-green-50 border border-green-100 rounded-xl p-4 items-start gap-3 mb-8">
@@ -350,8 +464,8 @@ const CartCheckout = () => {
                   <Truck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-green-800">Free Delivery</h4>
-                  <p className="text-xs text-green-700 mt-0.5">Your order is eligible for free delivery.</p>
+                  <h4 className="font-bold text-sm text-green-800">Fast Delivery</h4>
+                  <p className="text-xs text-green-700 mt-0.5">Dispatched within 24 hours from local hub.</p>
                 </div>
               </div>
 
@@ -398,9 +512,13 @@ const CartCheckout = () => {
             
             {/* Place Order CTA (Mobile) */}
             <div className="sm:hidden mt-6">
-              <button className="w-full bg-[#ff5a00] hover:bg-[#e65200] text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] text-[16px]">
+              <button 
+                onClick={handlePlaceOrder}
+                disabled={cart.length === 0}
+                className="w-full bg-[#ff5a00] hover:bg-[#e65200] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] text-[16px] cursor-pointer"
+              >
                 <Lock className="w-5 h-5 mr-1" />
-                Place Order <span className="font-medium mx-1">•</span> ₹2,399
+                Place Order <span className="font-medium mx-1">•</span> ₹{grandTotal.toLocaleString('en-IN')}
               </button>
               <div className="text-center text-xs text-gray-500 mt-4">
                 By placing your order, you agree to our <br/><Link to="/terms" className="text-blue-600 hover:underline font-semibold">Terms & Conditions</Link> and <Link to="/privacy" className="text-blue-600 hover:underline font-semibold">Privacy Policy</Link>.

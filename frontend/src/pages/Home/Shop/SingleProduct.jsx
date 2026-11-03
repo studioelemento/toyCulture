@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, Heart, Star, CheckCircle2, Minus, Plus, ShoppingCart, Zap, 
   ShieldCheck, CreditCard, Truck, RotateCcw, ChevronDown, Smile, Layers, Car,
-  Tag, Ruler, User
+  Tag, Ruler, User, Box, Shield, PackageCheck
 } from 'lucide-react';
+import { useCart } from '../../../context/CartContext';
 // Removed static import; product will be fetched via API
 
 const SingleProduct = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { addToCart } = useCart();
   const [activeImage, setActiveImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('Product Highlights');
-  const [openAccordion, setOpenAccordion] = useState('Product Highlights');
+  const [openAccordion, setOpenAccordion] = useState('Specifications');
 
   const [product, setProduct] = useState(null);
   const [loadingProduct, setLoadingProduct] = useState(true);
@@ -181,17 +184,33 @@ const SingleProduct = () => {
               </div>
             </div>
 
-            {/* Tags */}
-            <div className="flex items-center gap-4 mb-6 pt-2 pb-1">
-              <div className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium">
-                <Smile className="w-4 h-4 text-[#0F243E]" /> Age 8+ Years
-              </div>
-              <div className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium">
-                <Layers className="w-4 h-4 text-[#0F243E]" /> Die-cast Metal
-              </div>
-              <div className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium">
-                <Car className="w-4 h-4 text-[#0F243E]" /> Sports Car
-              </div>
+            {/* Stock status & Dynamic Tags */}
+            <div className="flex flex-wrap items-center gap-3 mb-5 pt-2 pb-1">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                product.inStock 
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {product.inStock ? `In Stock (${product.stock ?? product.stockQTY ?? 'Available'})` : 'Out of Stock'}
+              </span>
+
+              {product.ageGroup && (
+                <div className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium bg-gray-50 border border-gray-200/80 px-2.5 py-1 rounded-lg">
+                  <Smile className="w-3.5 h-3.5 text-[#2563EB]" /> Age: {product.ageGroup}
+                </div>
+              )}
+              {product.category && (
+                <div className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium bg-gray-50 border border-gray-200/80 px-2.5 py-1 rounded-lg">
+                  <Layers className="w-3.5 h-3.5 text-[#2563EB]" /> {product.category}
+                </div>
+              )}
+              {Array.isArray(product.attributes) && product.attributes.slice(0, 2).map((a, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[13px] text-[#0F243E] font-medium bg-gray-50 border border-gray-200/80 px-2.5 py-1 rounded-lg">
+                  <span className="text-gray-500 font-semibold">{a.attributeName || a.name}:</span>
+                  <span className="font-bold">{a.attributeValue || a.value}</span>
+                </div>
+              ))}
             </div>
 
             {/* Quantity */}
@@ -200,7 +219,8 @@ const SingleProduct = () => {
               <div className="flex items-center w-[120px] h-[40px] border border-gray-200 rounded-lg overflow-hidden">
                 <button 
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-10 h-full flex items-center justify-center text-[#2563EB] hover:bg-gray-50"
+                  disabled={!product.inStock}
+                  className="w-10 h-full flex items-center justify-center text-[#2563EB] hover:bg-gray-50 disabled:opacity-40"
                 >
                   <Minus className="w-4 h-4 font-bold" />
                 </button>
@@ -209,7 +229,8 @@ const SingleProduct = () => {
                 </div>
                 <button 
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-10 h-full flex items-center justify-center text-[#2563EB] hover:bg-gray-50"
+                  disabled={!product.inStock}
+                  className="w-10 h-full flex items-center justify-center text-[#2563EB] hover:bg-gray-50 disabled:opacity-40"
                 >
                   <Plus className="w-4 h-4 font-bold" />
                 </button>
@@ -218,11 +239,31 @@ const SingleProduct = () => {
 
             {/* Action Buttons */}
             <div className="flex flex-col gap-3 mt-auto pt-2">
-              <button className="w-full bg-[#F96515] hover:bg-[#EA580C] text-white text-[15px] font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all">
+              <button 
+                onClick={() => addToCart(product, quantity)}
+                disabled={!product.inStock}
+                className={`w-full text-white text-[15px] font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                  product.inStock
+                    ? 'bg-[#F96515] hover:bg-[#EA580C] shadow-lg shadow-orange-500/20 active:scale-[0.98]'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
                 <ShoppingCart className="w-5 h-5" />
-                Add to Cart
+                {product.inStock ? 'Add to Cart' : 'Out of Stock'}
               </button>
-              <button className="w-full bg-white border border-[#2563EB] text-[#2563EB] hover:bg-blue-50 text-[15px] font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all">
+              <button 
+                onClick={() => {
+                  if (!product.inStock) return;
+                  addToCart(product, quantity);
+                  navigate('/cart');
+                }}
+                disabled={!product.inStock}
+                className={`w-full text-[15px] font-bold py-3.5 rounded-lg flex items-center justify-center gap-2 transition-all ${
+                  product.inStock
+                    ? 'bg-white border-2 border-[#2563EB] text-[#2563EB] hover:bg-blue-50 active:scale-[0.98]'
+                    : 'bg-gray-100 border border-gray-300 text-gray-400 cursor-not-allowed'
+                }`}
+              >
                 <Zap className="w-5 h-5" />
                 Buy Now
               </button>
@@ -287,7 +328,10 @@ const SingleProduct = () => {
             {['Product Highlights', 'About this product', 'Specifications', 'Safety Information', 'Customer Reviews'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setOpenAccordion(tab);
+                }}
                 className={`py-4 px-4 text-[14px] font-bold border-b-2 whitespace-nowrap transition-colors ${
                   activeTab === tab 
                   ? 'border-[#F96515] text-[#0F243E]' 
@@ -302,7 +346,7 @@ const SingleProduct = () => {
           <div className="flex flex-col md:flex-row items-start">
             
             {/* Desktop Left: Product Highlights Grid */}
-            <div className="hidden md:block w-full md:w-[45%] flex-shrink-0 p-8">
+            <div className="hidden md:block w-full md:w-[45%] flex-shrink-0 p-8 border-r border-gray-200">
               <h2 className="text-[18px] font-black text-[#0F243E] mb-6">Product Highlights</h2>
               <div className="grid grid-cols-2 gap-y-6 gap-x-4">
                 
@@ -318,11 +362,11 @@ const SingleProduct = () => {
 
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0">
-                    <Ruler className="w-5 h-5 text-[#334155]" />
+                    <Layers className="w-5 h-5 text-[#334155]" />
                   </div>
                   <div>
-                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Scale</div>
-                    <div className="text-[14px] font-bold text-[#0F243E]">1:18</div>
+                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Category</div>
+                    <div className="text-[14px] font-bold text-[#0F243E]">{product.category}</div>
                   </div>
                 </div>
 
@@ -331,45 +375,38 @@ const SingleProduct = () => {
                     <User className="w-5 h-5 text-[#334155]" />
                   </div>
                   <div>
-                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Age</div>
-                    <div className="text-[14px] font-bold text-[#0F243E]">8+ Years</div>
+                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Recommended Age</div>
+                    <div className="text-[14px] font-bold text-[#0F243E]">{product.ageGroup || 'All Ages'}</div>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0">
-                    <Car className="w-5 h-5 text-[#334155]" />
+                    <CheckCircle2 className={`w-5 h-5 ${product.inStock ? 'text-emerald-600' : 'text-rose-500'}`} />
                   </div>
                   <div>
-                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Vehicle Type</div>
-                    <div className="text-[14px] font-bold text-[#0F243E]">Sports Car</div>
+                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Availability</div>
+                    <div className={`text-[14px] font-bold ${product.inStock ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {product.inStock ? 'In Stock' : 'Out of Stock'}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0">
-                    <Layers className="w-5 h-5 text-[#334155]" />
+                {/* Dynamic Attributes in Highlights */}
+                {Array.isArray(product.attributes) && product.attributes.slice(0, 4).map((attr, idx) => (
+                  <div key={idx} className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0">
+                      <Box className="w-5 h-5 text-[#334155]" />
+                    </div>
+                    <div>
+                      <div className="text-[12px] text-gray-500 font-medium mb-0.5">{attr.attributeName || attr.name}</div>
+                      <div className="text-[14px] font-bold text-[#0F243E]">{attr.attributeValue || attr.value}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Material</div>
-                    <div className="text-[14px] font-bold text-[#0F243E]">Die-cast Metal</div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0">
-                    <Star className="w-5 h-5 text-[#334155]" />
-                  </div>
-                  <div>
-                    <div className="text-[12px] text-gray-500 font-medium mb-0.5">Recommended For</div>
-                    <div className="text-[14px] font-bold text-[#0F243E]">Collectors</div>
-                  </div>
-                </div>
+                ))}
 
               </div>
             </div>
-
-            <div className="hidden md:block w-px min-h-[300px] bg-gray-200 self-stretch"></div>
 
             {/* Right / Mobile Accordions */}
             <div className="w-full md:flex-1 flex flex-col p-4 md:p-8 md:pl-12">
@@ -393,26 +430,28 @@ const SingleProduct = () => {
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-8 h-8 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0"><Ruler className="w-4 h-4 text-[#334155]" /></div>
+                      <div className="w-8 h-8 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0"><Layers className="w-4 h-4 text-[#334155]" /></div>
                       <div>
-                        <div className="text-[11px] text-gray-500 font-medium mb-0.5">Scale</div>
-                        <div className="text-[13px] font-bold text-[#0F243E]">1:18</div>
+                        <div className="text-[11px] text-gray-500 font-medium mb-0.5">Category</div>
+                        <div className="text-[13px] font-bold text-[#0F243E]">{product.category}</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="w-8 h-8 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0"><User className="w-4 h-4 text-[#334155]" /></div>
                       <div>
                         <div className="text-[11px] text-gray-500 font-medium mb-0.5">Age</div>
-                        <div className="text-[13px] font-bold text-[#0F243E]">8+ Years</div>
+                        <div className="text-[13px] font-bold text-[#0F243E]">{product.ageGroup || 'All Ages'}</div>
                       </div>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <div className="w-8 h-8 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0"><Layers className="w-4 h-4 text-[#334155]" /></div>
-                      <div>
-                        <div className="text-[11px] text-gray-500 font-medium mb-0.5">Material</div>
-                        <div className="text-[13px] font-bold text-[#0F243E]">Die-cast Metal</div>
+                    {Array.isArray(product.attributes) && product.attributes.slice(0, 3).map((attr, idx) => (
+                      <div key={idx} className="flex items-start gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#f1f5f9] flex items-center justify-center flex-shrink-0"><Box className="w-4 h-4 text-[#334155]" /></div>
+                        <div>
+                          <div className="text-[11px] text-gray-500 font-medium mb-0.5">{attr.attributeName || attr.name}</div>
+                          <div className="text-[13px] font-bold text-[#0F243E]">{attr.attributeValue || attr.value}</div>
+                        </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -420,8 +459,8 @@ const SingleProduct = () => {
               {/* Desktop Always Visible: About this product */}
               <div className="hidden md:block mb-6">
                 <h3 className="text-[16px] font-bold text-[#0F243E] mb-2">About this product</h3>
-                <p className="text-[14px] leading-[1.6] text-[#475569]">
-                  The {product.brand} {product.name} is a premium toy that brings joy and fun. With its sleek design, accurate detailing and high-quality finish, this model is a perfect blend of style and craftsmanship. Ideal for kids, it offers a realistic and engaging play experience.
+                <p className="text-[14px] leading-[1.6] text-[#475569] whitespace-pre-line">
+                  {product.description || product.small_description || `The ${product.brand} ${product.name} is a premium toy that brings joy and fun. With its sleek design, accurate detailing and high-quality finish, this model is a perfect blend of style and craftsmanship.`}
                 </p>
               </div>
 
@@ -437,23 +476,44 @@ const SingleProduct = () => {
                     <ChevronDown className={`w-5 h-5 text-[#0F243E] transition-transform ${openAccordion === 'About this product' ? 'rotate-180' : ''}`} />
                   </button>
                   {openAccordion === 'About this product' && (
-                    <div className="pb-4 text-[13px] leading-[1.6] text-[#475569]">
-                      The {product.brand} {product.name} is a premium toy that brings joy and fun. With its sleek design, accurate detailing and high-quality finish, this model is a perfect blend of style and craftsmanship. Ideal for kids, it offers a realistic and engaging play experience.
+                    <div className="pb-4 text-[13px] leading-[1.6] text-[#475569] whitespace-pre-line">
+                      {product.description || product.small_description || `The ${product.brand} ${product.name} is a premium toy that brings joy and fun.`}
                     </div>
                   )}
                 </div>
 
+                {/* Specifications Accordion (Dynamic from Database) */}
                 <div className="border-b border-gray-100">
                   <button 
                     className="flex items-center justify-between w-full py-4 group"
                     onClick={() => setOpenAccordion(openAccordion === 'Specifications' ? '' : 'Specifications')}
                   >
-                    <span className="text-[15px] font-bold text-[#0F243E] group-hover:text-[#2563EB] transition-colors">Specifications</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[15px] font-bold text-[#0F243E] group-hover:text-[#2563EB] transition-colors">Specifications</span>
+                      {Array.isArray(product.attributes) && product.attributes.length > 0 && (
+                        <span className="text-[11px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
+                          {product.attributes.length} specs
+                        </span>
+                      )}
+                    </div>
                     <ChevronDown className={`w-5 h-5 text-[#0F243E] transition-transform ${openAccordion === 'Specifications' ? 'rotate-180' : ''}`} />
                   </button>
                   {openAccordion === 'Specifications' && (
                     <div className="pb-4 text-[13px] leading-[1.6] text-[#475569]">
-                      Dimensions: 10 x 5 x 4 inches<br />Weight: 1.2 lbs<br />Batteries: Not required
+                      {Array.isArray(product.attributes) && product.attributes.length > 0 ? (
+                        <div className="rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-100 mt-1">
+                          {product.attributes.map((attr, idx) => (
+                            <div key={idx} className="flex justify-between items-center py-2.5 px-3.5 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                              <span className="font-semibold text-gray-600">{attr.attributeName || attr.name}</span>
+                              <span className="font-bold text-[#0F243E]">{attr.attributeValue || attr.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="py-2 text-gray-500 italic">
+                          Standard manufacturer specifications apply for {product.name}.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
