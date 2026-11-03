@@ -6,6 +6,7 @@ import {
   Search,
   Trash2,
   Eye,
+  Edit3,
   RefreshCw,
   ExternalLink,
   Filter,
@@ -40,7 +41,7 @@ export default function ProductList() {
     if (!window.confirm(`Are you sure you want to delete "${name}" from PostgreSQL database?`)) return;
 
     try {
-      const res = await fetch(`/api/v1/admin/products/${id}`, {
+      const res = await fetch(`/api/v1/products/${id}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -246,6 +247,14 @@ export default function ProductList() {
                       {/* Actions */}
                       <td className="py-3.5 px-6 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <Link
+                            to={`/products/edit/${p.id}`}
+                            title="Edit Product"
+                            className="p-1.5 text-slate-400 hover:text-amber-300 hover:bg-amber-950/40 rounded-lg transition-colors inline-flex items-center gap-1 text-xs"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                            <span className="hidden md:inline">Edit</span>
+                          </Link>
                           <a
                             href={`http://localhost:5173/product/${p.id}`}
                             target="_blank"

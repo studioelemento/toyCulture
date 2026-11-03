@@ -28,7 +28,7 @@ export default function Brands() {
   const fetchBrands = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/brand?limit=100&search=${search}`);
+      const res = await fetch(`/api/admin/brands?limit=100&search=${encodeURIComponent(search)}`);
       const data = await res.json();
       setBrands(data.data || []);
     } catch {
@@ -70,8 +70,8 @@ export default function Brands() {
     setMsg({ text: "", type: "" });
     try {
       const url = editingId
-        ? `/api/admin/brand/${editingId}`
-        : "/api/admin/brand";
+        ? `/api/admin/brands/${editingId}`
+        : "/api/admin/brands";
       const method = editingId ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -100,7 +100,7 @@ export default function Brands() {
 
   const toggleBrand = async (id) => {
     try {
-      const res = await fetch(`/api/admin/brand/toggle/${id}`, {
+      const res = await fetch(`/api/admin/brands/toggle/${id}`, {
         method: "PATCH",
       });
       if (res.ok) fetchBrands();

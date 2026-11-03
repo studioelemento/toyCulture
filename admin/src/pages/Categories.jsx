@@ -13,9 +13,11 @@ import {
   Sparkles,
   ChevronRight,
   FolderOpen,
+  Sliders,
+  Trash2,
 } from "lucide-react";
 
-const emptyCategory = { name: "", parent_id: "", seo_description: "" };
+const emptyCategory = { name: "", parent_id: "", seo_description: "", attributes: [] };
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
@@ -30,7 +32,7 @@ export default function Categories() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/category?limit=100&search=${search}`);
+      const res = await fetch(`/api/admin/categories?limit=100&search=${encodeURIComponent(search)}`);
       const data = await res.json();
       setCategories(data.data || []);
     } catch {
@@ -53,7 +55,7 @@ export default function Categories() {
 
   const openAdd = (parentId = "") => {
     setEditingId(null);
-    setForm({ ...emptyCategory, parent_id: parentId });
+    setForm({ ...emptyCategory, parent_id: parentId, attributes: [] });
     setShowForm(true);
     setMsg({ text: "", type: "" });
   };
@@ -64,6 +66,7 @@ export default function Categories() {
       name: cat.name,
       parent_id: cat.parent_id || "",
       seo_description: cat.seo_description || "",
+      attributes: Array.isArray(cat.attributes) ? cat.attributes : [],
     });
     setShowForm(true);
     setMsg({ text: "", type: "" });
@@ -75,12 +78,20 @@ export default function Categories() {
     setMsg({ text: "", type: "" });
     try {
       const url = editingId
-        ? `/api/admin/category/${editingId}`
-        : "/api/admin/category";
+        ? `/api/admin/categories/${editingId}`
+        : "/api/admin/categories";
       const method = editingId ? "PUT" : "POST";
       const payload = {
         ...form,
         parent_id: form.parent_id || null,
+        attributes: (form.attributes || [])
+          .filter((a) => a && a.name && a.name.trim())
+          .map((a) => ({
+            id: a.id || "cat-attr-" + Math.random().toString(36).substring(2, 9),
+            name: a.name.trim(),
+            placeholder: a.placeholder ? a.placeholder.trim() : "",
+            hint: a.hint ? a.hint.trim() : "",
+          })),
       };
       const res = await fetch(url, {
         method,
@@ -109,7 +120,7 @@ export default function Categories() {
 
   const toggleCategory = async (id) => {
     try {
-      const res = await fetch(`/api/admin/category/toggle/${id}`, {
+      const res = await fetch(`/api/admin/categories/toggle/${id}`, {
         method: "PATCH",
       });
       if (res.ok) fetchCategories();
@@ -247,6 +258,188 @@ export default function Categories() {
                 className={inputClass + " resize-y"}
               />
             </div>
+
+            {/* Category Specifications / Attributes Template Builder */}
+            <div className="p-4 rounded-2xl bg-[#090D16]/70 border border-indigo-950/70 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-bold text-white tracking-wide">
+                      Category Specifications Template ({(form.attributes || []).length})
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Define specification fields that products under this {form.parent_id ? "subcategory" : "category"} will prompt admins to fill.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((f) => ({
+                      ...f,
+                      attributes: [
+                        ...(f.attributes || []),
+                        {
+                          id: "cat-attr-" + Math.random().toString(36).substring(2, 9),
+                          name: "",
+                          placeholder: "",
+                          hint: "",
+                        },
+                      ],
+                    }));
+                  }}
+                  className="text-[11px] font-bold text-indigo-300 hover:text-white bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Add Specification</span>
+                </button>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mr-1">
+                  Quick Presets:
+                </span>
+                {[
+                  { name: "Material", placeholder: "e.g. Non-toxic BPA-free Plastic", hint: "Core material" },
+                  { name: "Recommended Age", placeholder: "e.g. 3 to 8 Years", hint: "Age appropriateness" },
+                  { name: "Product Dimensions", placeholder: "e.g. 25 x 12 x 10 cm", hint: "L x W x H" },
+                  { name: "Item Weight", placeholder: "e.g. 450 grams", hint: "Weight" },
+                  { name: "Safety Certifications", placeholder: "e.g. BIS / EN71 Certified", hint: "Testing standard" },
+                  { name: "Country of Origin", placeholder: "e.g. India", hint: "Manufacturing country" },
+                  { name: "Pieces Count", placeholder: "e.g. 500 pcs", hint: "Total count of pieces" },
+                  { name: "Scale", placeholder: "e.g. 1:18 Scale", hint: "Scale ratio" },
+                  { name: "Battery Specs", placeholder: "e.g. 7.4V Rechargeable Li-ion", hint: "Battery requirements" },
+                  { name: "Assembly Required", placeholder: "e.g. Yes", hint: "Assembly" },
+                  { name: "Theme / Series", placeholder: "e.g. Technic / City / Hero", hint: "Series line" },
+                  { name: "Warranty", placeholder: "e.g. 6 Months Manufacturer Warranty", hint: "Warranty duration" },
+                ].map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => {
+                        const current = f.attributes || [];
+                        if (current.some((a) => a.name.toLowerCase().trim() === preset.name.toLowerCase().trim())) {
+                          return f;
+                        }
+                        return {
+                          ...f,
+                          attributes: [
+                            ...current,
+                            {
+                              id: "cat-attr-" + Math.random().toString(36).substring(2, 9),
+                              ...preset,
+                            },
+                          ],
+                        };
+                      });
+                    }}
+                    className="text-[10px] font-semibold text-slate-400 hover:text-indigo-200 bg-[#121A2F] hover:bg-indigo-950/60 border border-indigo-950 px-2 py-0.5 rounded-lg transition-colors"
+                  >
+                    + {preset.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Attribute Inputs List */}
+              <div className="space-y-2.5 pt-2">
+                {(form.attributes || []).map((attr, idx) => (
+                  <div
+                    key={attr.id || idx}
+                    className="bg-[#121A2F]/80 border border-indigo-950/80 rounded-xl p-3 flex flex-col md:flex-row items-stretch md:items-center gap-2.5 transition-all"
+                  >
+                    <div className="flex-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                        Attribute Name *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Scale, Pieces Count, Battery..."
+                        value={attr.name || ""}
+                        required
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((f) => ({
+                            ...f,
+                            attributes: (f.attributes || []).map((item, i) =>
+                              i === idx ? { ...item, name: val } : item
+                            ),
+                          }));
+                        }}
+                        className="w-full bg-[#090D16] border border-indigo-950 rounded-lg px-3 py-1.5 text-xs text-white font-bold placeholder:text-slate-600 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                        Placeholder / Example Value
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 1:18 Scale / 500 pcs"
+                        value={attr.placeholder || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((f) => ({
+                            ...f,
+                            attributes: (f.attributes || []).map((item, i) =>
+                              i === idx ? { ...item, placeholder: val } : item
+                            ),
+                          }));
+                        }}
+                        className="w-full bg-[#090D16] border border-indigo-950 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                        Hint / Help Text
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Model scale ratio"
+                        value={attr.hint || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((f) => ({
+                            ...f,
+                            attributes: (f.attributes || []).map((item, i) =>
+                              i === idx ? { ...item, hint: val } : item
+                            ),
+                          }));
+                        }}
+                        className="w-full bg-[#090D16] border border-indigo-950 rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => ({
+                          ...f,
+                          attributes: (f.attributes || []).filter((_, i) => i !== idx),
+                        }));
+                      }}
+                      title="Remove specification"
+                      className="self-end md:self-center p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors shrink-0 mt-3 md:mt-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+
+                {(!form.attributes || form.attributes.length === 0) && (
+                  <div className="text-center py-4 bg-[#090D16]/40 border border-dashed border-indigo-950/60 rounded-xl">
+                    <p className="text-xs text-slate-500">
+                      No custom specifications added yet. Products in this category will use default toy specs or quick presets above.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
@@ -300,6 +493,9 @@ export default function Categories() {
                         {parent.subcategories.length} sub
                       </span>
                     )}
+                    <span className="text-[10px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                      {Array.isArray(parent.attributes) ? parent.attributes.length : 0} specs
+                    </span>
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         parent.is_active
@@ -349,6 +545,9 @@ export default function Categories() {
                       <ChevronRight className="w-3 h-3 text-slate-600" />
                       <span className="text-xs font-semibold text-slate-300">
                         {sub.name}
+                      </span>
+                      <span className="text-[9px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20 px-1.5 py-0.2 rounded-full">
+                        {Array.isArray(sub.attributes) ? sub.attributes.length : 0} specs
                       </span>
                       <span
                         className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
