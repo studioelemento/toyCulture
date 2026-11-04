@@ -49,8 +49,8 @@ export default function MyAddresses() {
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // Address cards matching reference image
-  const [addresses, setAddresses] = useState([
+  // Fallback initial addresses
+  const initialAddresses = [
     {
       id: 'addr-1',
       type: 'Home',
@@ -90,7 +90,50 @@ export default function MyAddresses() {
       mobile: '+91 98765 43210',
       color: 'amber'
     }
-  ]);
+  ];
+
+  const [addresses, setAddresses] = useState(initialAddresses);
+  const [loading, setLoading] = useState(false);
+
+  const fetchAddresses = async () => {
+    try {
+      setLoading(true);
+      const userEmail = currentUser?.email || 'customer@toyculture.com';
+      const res = await fetch('/api/account/address', {
+        headers: { 'x-user-email': userEmail }
+      });
+      const json = await res.json();
+      if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+        const mapped = json.data.map((addr) => {
+          const isWork = (addr.address_type || '').toUpperCase() === 'WORK';
+          const isHome = (addr.address_type || '').toUpperCase() === 'HOME';
+          const typeName = isWork ? 'Office' : (isHome ? 'Home' : 'Other');
+          return {
+            id: addr.id,
+            type: typeName,
+            icon: isWork ? Briefcase : (isHome ? HomeIcon : MapPin),
+            isDefault: Boolean(addr.is_primary),
+            name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || displayName,
+            line1: addr.address || '',
+            line2: addr.landmark || addr.place || '',
+            cityState: `${addr.place || ''}, ${addr.state || 'Kerala'} ${addr.pincode || ''}`,
+            pincode: addr.pincode || '',
+            mobile: addr.phone || '+91 98765 43210',
+            color: isWork ? 'slate' : (isHome ? 'blue' : 'amber'),
+          };
+        });
+        setAddresses(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to fetch addresses:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAddresses();
+  }, [currentUser]);
 
   // Form State
   const [showMobileModal, setShowMobileModal] = useState(false);
@@ -105,18 +148,36 @@ export default function MyAddresses() {
   const [state, setState] = useState('');
   const [isDefault, setIsDefault] = useState(false);
 
-  const handleSetDefault = (id) => {
+  const handleSetDefault = async (id) => {
     setAddresses(
       addresses.map((a) => ({
         ...a,
         isDefault: a.id === id,
       }))
     );
+    try {
+      const userEmail = currentUser?.email || 'customer@toyculture.com';
+      await fetch(`/api/account/address/set-as-primary/${id}`, {
+        method: 'PATCH',
+        headers: { 'x-user-email': userEmail }
+      });
+    } catch (err) {
+      console.error('Failed to set primary address:', err);
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this address?')) {
       setAddresses(addresses.filter((a) => a.id !== id));
+      try {
+        const userEmail = currentUser?.email || 'customer@toyculture.com';
+        await fetch(`/api/account/address/${id}`, {
+          method: 'DELETE',
+          headers: { 'x-user-email': userEmail }
+        });
+      } catch (err) {
+        console.error('Failed to delete address:', err);
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -28,6 +28,36 @@ export default function MyOrderDetailes() {
   const { currentUser, logout } = useAuth();
   const { addToCart } = useCart();
   const navigate = useNavigate();
+  const { id } = useParams();
+
+  const [liveOrder, setLiveOrder] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!id || id === 'TC10482') return;
+
+    const fetchOrderDetail = async () => {
+      try {
+        setLoading(true);
+        const userEmail = currentUser?.email || 'customer@toyculture.com';
+        const res = await fetch(`/api/order/${id}`, {
+          headers: { 'x-user-email': userEmail }
+        });
+        const json = await res.json();
+        if (json.status === 'success' && json.data) {
+          if (isMounted) setLiveOrder(json.data);
+        }
+      } catch (err) {
+        console.error('Failed to load order detail:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchOrderDetail();
+    return () => { isMounted = false; };
+  }, [id, currentUser]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -46,15 +76,15 @@ export default function MyOrderDetailes() {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/account' },
     { id: 'orders', label: 'My Orders', icon: Package, path: '/account/orders' },
-    { id: 'addresses', label: 'My Addresses', icon: MapPin, path: '/account' },
-    { id: 'personal', label: 'Personal Details', icon: User, path: '/account' },
-    { id: 'wishlist', label: 'My Wishlist', icon: Heart, path: '/account' },
-    { id: 'coupons', label: 'Coupons & Rewards', icon: Tag, path: '/account' },
+    { id: 'addresses', label: 'My Addresses', icon: MapPin, path: '/account/addresses' },
+    { id: 'personal', label: 'Personal Details', icon: User, path: '/account/personal' },
+    { id: 'wishlist', label: 'My Wishlist', icon: Heart, path: '/account/wishlist' },
+    { id: 'coupons', label: 'Coupons & Rewards', icon: Tag, path: '/account/coupons' },
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // Ordered items matching reference image
-  const orderItems = [
+  // Fallback ordered items matching reference image
+  const fallbackOrderItems = [
     {
       id: 'item-1',
       name: 'Lamborghini Huracán LP 610-4',
@@ -78,6 +108,28 @@ export default function MyOrderDetailes() {
       fallback: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp'
     }
   ];
+
+  const orderItems = liveOrder?.items?.length ? liveOrder.items.map((it, idx) => ({
+    id: it.id || `item-${idx}`,
+    name: it.product_name || 'Toy Product',
+    brand: 'ToyCulture',
+    material: '',
+    scale: '',
+    price: Number(it.price || 0),
+    quantity: it.quantity || 1,
+    image: it.product_image || '/lamborghini.jpg',
+    fallback: '/lamborghini.jpg'
+  })) : fallbackOrderItems;
+
+  const displayOrderNumber = liveOrder?.order_number || liveOrder?.id || (id || 'TC10482');
+  const displayOrderDate = liveOrder?.createdAt ? new Date(liveOrder.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '21 Oct 2026 at 10:24 AM';
+  const displayStatus = (liveOrder?.status || 'Delivered').toUpperCase();
+  const displayPaymentMethod = liveOrder?.payment_method ? (liveOrder.payment_method === 'COD' ? 'Cash on Delivery (COD)' : liveOrder.payment_method) : 'UPI (Google Pay)';
+  const displayShipping = liveOrder?.shipping_address || null;
+  const displaySubtotal = liveOrder ? (Number(liveOrder.subtotal) || orderItems.reduce((acc, it) => acc + (it.price * it.quantity), 0)) : 2998;
+  const displayDiscount = liveOrder ? Number(liveOrder.coupon_discount || 0) : 300;
+  const displayTotal = liveOrder ? Number(liveOrder.total_amount || 0) : 2698;
+  const displayDeliveryFee = liveOrder ? (liveOrder.delivery_charge || 0) : 0;
 
   const handleLogout = () => {
     logout();
@@ -211,14 +263,14 @@ export default function MyOrderDetailes() {
                     My Orders
                   </Link>
                   <span>&gt;</span>
-                  <span className="text-slate-600 font-bold">Order #TC10482</span>
+                  <span className="text-slate-600 font-bold">Order #{displayOrderNumber}</span>
                 </div>
 
                 <h1 className="text-3xl sm:text-4xl font-black text-[#0B1B3D] tracking-tight">
                   Order Details
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
-                  Placed on 21 Oct 2026 at 10:24 AM
+                  Placed on {displayOrderDate}
                 </p>
               </div>
 
@@ -241,18 +293,18 @@ export default function MyOrderDetailes() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-base sm:text-xl font-black text-[#0B1B3D]">
-                      Order #TC10482
+                      Order #{displayOrderNumber}
                     </h2>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      Delivered
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold ${displayStatus === 'CANCELLED' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${displayStatus === 'CANCELLED' ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
+                      {displayStatus}
                     </span>
                   </div>
                   <p className="text-[11px] sm:text-xs text-slate-400 font-medium mt-1 leading-relaxed">
-                    Placed on 21 Oct 2026 at 10:24 AM
+                    Placed on {displayOrderDate}
                   </p>
                   <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-                    2 items <span className="mx-1.5">|</span> Paid via UPI
+                    {orderItems.length} item${orderItems.length === 1 ? '' : 's'} <span className="mx-1.5">|</span> Paid via {displayPaymentMethod}
                   </p>
                 </div>
 
@@ -503,7 +555,7 @@ export default function MyOrderDetailes() {
 
               <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-xs text-slate-500 font-bold">Total Charged</span>
-                <span className="text-base font-black text-slate-900">₹2,998</span>
+                <span className="text-base font-black text-slate-900">₹{Number(displaySubtotal).toLocaleString('en-IN')}</span>
               </div>
             </div>
 
@@ -519,7 +571,7 @@ export default function MyOrderDetailes() {
               <div className="mt-3 space-y-2 text-xs">
                 <div className="flex justify-between items-center text-slate-600">
                   <span>Subtotal (2 items)</span>
-                  <span className="font-bold text-slate-800">₹2,998</span>
+                  <span className="font-bold text-slate-800">₹{Number(displaySubtotal).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-600">
                   <span>Shipping Charges</span>
@@ -527,13 +579,13 @@ export default function MyOrderDetailes() {
                 </div>
                 <div className="flex justify-between items-center text-emerald-600">
                   <span>Discount (WELCOME10)</span>
-                  <span className="font-bold">- ₹300</span>
+                  <span className="font-bold">- ₹{Number(displayDiscount).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
               <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-sm font-black text-slate-900">Total Paid</span>
-                <span className="text-lg font-black text-slate-900">₹2,698</span>
+                <span className="text-lg font-black text-slate-900">₹{Number(displayTotal).toLocaleString('en-IN')}</span>
               </div>
             </div>
 

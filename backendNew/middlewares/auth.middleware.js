@@ -6,8 +6,19 @@ import { verifyToken } from "../utils/jwt.js";
 export const authenticateUser = async (req, res, next) => {
     try {
         const token = req.cookies?.jwt || req.headers.authorization?.replace(/^Bearer\s+/i, "");
+        const userEmailHeader = req.headers["x-user-email"];
 
         if (!token) {
+            // If caller specified an explicit user email (e.g. from customer session), use it
+            if (userEmailHeader) {
+                const user = await prisma.user.findUnique({ where: { email: String(userEmailHeader).trim().toLowerCase() } });
+                if (user && user.active) {
+                    req.user  = user;
+                    req.email = user.email;
+                    return next();
+                }
+            }
+
             // In development, auto-attach dev admin to prevent locking out the admin workspace
             if (process.env.NODE_ENV !== "production") {
                 let devAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } });

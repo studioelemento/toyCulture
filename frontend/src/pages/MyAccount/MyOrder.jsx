@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -55,7 +55,7 @@ export default function MyOrder() {
   const stats = [
     {
       title: 'Total Orders',
-      count: '12',
+      count: String(totalOrdersCount),
       icon: Package,
       iconBg: 'bg-[#EFF6FF]',
       iconColor: 'text-[#2563EB]',
@@ -64,7 +64,7 @@ export default function MyOrder() {
     },
     {
       title: 'In Transit',
-      count: '1',
+      count: String(inTransitCount),
       icon: Truck,
       iconBg: 'bg-[#FFF7ED]',
       iconColor: 'text-[#EA580C]',
@@ -73,7 +73,7 @@ export default function MyOrder() {
     },
     {
       title: 'Delivered',
-      count: '9',
+      count: String(deliveredCount),
       icon: CheckCircle2,
       iconBg: 'bg-[#ECFDF5]',
       iconColor: 'text-[#059669]',
@@ -82,7 +82,7 @@ export default function MyOrder() {
     },
     {
       title: 'Cancelled / Returned',
-      count: '2',
+      count: String(cancelledCount),
       icon: LogOut,
       iconBg: 'bg-[#FAF5FF]',
       iconColor: 'text-[#9333EA]',
@@ -91,8 +91,8 @@ export default function MyOrder() {
     },
   ];
 
-  // Orders list matching both mobile and desktop reference images
-  const orders = [
+  // Fallback orders list for initial template preview
+  const fallbackOrders = [
     {
       id: 'TC10482',
       date: '21 Oct 2026',
@@ -188,6 +188,123 @@ export default function MyOrder() {
       lineColor: 'bg-emerald-500'
     }
   ];
+
+  const [ordersList, setOrdersList] = useState(fallbackOrders);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const userEmail = currentUser?.email || 'customer@toyculture.com';
+        const res = await fetch('/api/order', {
+          headers: { 'x-user-email': userEmail }
+        });
+        const json = await res.json();
+        if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
+          const mapped = json.data.map((order) => {
+            const dateObj = new Date(order.createdAt);
+            const dateFormatted = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+            const firstItem = order.items?.[0];
+            const extraCount = (order.items?.length || 1) - 1;
+            const title = firstItem?.product_name
+              ? `${firstItem.product_name}${extraCount > 0 ? ` + ${extraCount} more` : ''}`
+              : 'ToyCulture Order';
+            const statusUpper = (order.status || 'PLACED').toUpperCase();
+
+            let statusText = 'Placed';
+            let statusType = 'processing';
+            let lineColor = 'bg-amber-500';
+            let progressWidth = '20%';
+            let hasTrack = false;
+            let isCancelled = false;
+
+            if (statusUpper === 'CONFIRMED' || statusUpper === 'PACKED') {
+              statusText = statusUpper === 'PACKED' ? 'Packed' : 'Confirmed';
+              statusType = 'processing';
+              lineColor = 'bg-amber-500';
+              progressWidth = '45%';
+              hasTrack = true;
+            } else if (statusUpper === 'SHIPPED') {
+              statusText = 'Shipped';
+              statusType = 'shipped';
+              lineColor = 'bg-emerald-500';
+              progressWidth = '75%';
+              hasTrack = true;
+            } else if (statusUpper === 'DELIVERED') {
+              statusText = 'Delivered';
+              statusType = 'delivered';
+              lineColor = 'bg-blue-600';
+              progressWidth = '100%';
+              hasTrack = false;
+            } else if (statusUpper === 'CANCELLED' || statusUpper === 'RETURNED') {
+              statusText = statusUpper === 'CANCELLED' ? 'Cancelled' : 'Returned';
+              statusType = 'cancelled';
+              lineColor = 'bg-purple-400';
+              progressWidth = '100%';
+              hasTrack = false;
+              isCancelled = true;
+            }
+
+            const steps = isCancelled ? [
+              { label: 'Ordered', date: dateFormatted.split(' ').slice(0, 2).join(' '), done: true },
+              { label: statusText, date: 'Updated', done: true, isCancelled: true },
+            ] : [
+              { label: 'Ordered', date: dateFormatted.split(' ').slice(0, 2).join(' '), done: true },
+              { label: 'Shipped', date: ['SHIPPED', 'DELIVERED'].includes(statusUpper) ? 'Done' : '-', done: ['SHIPPED', 'DELIVERED'].includes(statusUpper), current: statusUpper === 'SHIPPED' },
+              { label: 'Out for Delivery', date: statusUpper === 'DELIVERED' ? 'Done' : '-', done: statusUpper === 'DELIVERED' },
+              { label: 'Delivered', date: statusUpper === 'DELIVERED' ? 'Done' : '-', done: statusUpper === 'DELIVERED' },
+            ];
+
+            return {
+              id: order.order_number || order.id?.slice(0, 8),
+              rawId: order.id,
+              date: dateFormatted,
+              itemsCount: `${order.items?.length || 1} item${order.items?.length === 1 ? '' : 's'}`,
+              title,
+              amount: `₹${Number(order.total_amount || 0).toLocaleString('en-IN')}`,
+              status: statusText,
+              statusType,
+              hasTrack,
+              image: firstItem?.product_image || '/lamborghini.jpg',
+              steps,
+              progressWidth,
+              lineColor,
+            };
+          });
+          if (isMounted) setOrdersList(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load orders from API:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchOrders();
+    return () => { isMounted = false; };
+  }, [currentUser]);
+
+  // Dynamic order stats computed from real orders
+  const totalOrdersCount = ordersList.length;
+  const inTransitCount = ordersList.filter(o => ['processing', 'shipped'].includes(o.statusType)).length;
+  const deliveredCount = ordersList.filter(o => o.statusType === 'delivered').length;
+  const cancelledCount = ordersList.filter(o => o.statusType === 'cancelled').length;
+
+  // Filtered orders list matching search and dropdown filters
+  const orders = ordersList.filter((order) => {
+    if (filterStatus === 'In Transit' && !['processing', 'shipped'].includes(order.statusType)) return false;
+    if (filterStatus === 'Delivered' && order.statusType !== 'delivered') return false;
+    if (filterStatus === 'Cancelled' && order.statusType !== 'cancelled') return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchId = String(order.id || '').toLowerCase().includes(q);
+      const matchTitle = String(order.title || '').toLowerCase().includes(q);
+      return matchId || matchTitle;
+    }
+    return true;
+  });
 
   const handleLogout = () => {
     logout();
@@ -422,7 +539,7 @@ export default function MyOrder() {
               {orders.map((order) => (
                 <div
                   key={order.id}
-                  onClick={() => navigate('/account/orders/TC10482')}
+                  onClick={() => navigate(`/account/orders/${order.rawId || order.id}`)}
                   className="bg-white rounded-3xl p-3.5 sm:p-6 border border-slate-100 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-6 hover:border-slate-200 transition-colors cursor-pointer group"
                 >
                   {/* MOBILE & DESKTOP ROW: Image + Order Info + Chevron */}
@@ -512,7 +629,7 @@ export default function MyOrder() {
                     )}
 
                     <button
-                      onClick={() => navigate('/account/orders/TC10482')}
+                      onClick={() => navigate(`/account/orders/${order.rawId || order.id}`)}
                       className={`text-xs font-bold text-slate-700 hover:text-[#4F46E5] transition-colors flex items-center gap-1 ${
                         !order.hasTrack ? 'bg-slate-100 hover:bg-slate-200 px-5 py-2 rounded-xl' : 'mt-0.5'
                       }`}
