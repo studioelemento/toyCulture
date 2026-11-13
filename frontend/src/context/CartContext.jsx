@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { trackAddToCart } from '../lib/analytics';
 
 const CartContext = createContext();
 
@@ -35,7 +36,8 @@ export const CartProvider = ({ children }) => {
   };
 
   const addToCart = (product, quantity = 1) => {
-    const isOutOfStock = product?.inStock === false || product?.stock === 0;
+    const stockCap = Number(product?.stockQTY ?? product?.stock);
+    const isOutOfStock = product?.inStock === false || stockCap === 0;
     if (isOutOfStock) {
       showToast(`Sorry, "${product?.name || 'This item'}" is currently out of stock.`);
       return;
@@ -50,17 +52,31 @@ export const CartProvider = ({ children }) => {
 
       if (existingIndex > -1) {
         const updated = [...prevCart];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + quantity,
-        };
+        const nextQty = updated[existingIndex].quantity + quantity;
+        if (Number.isFinite(stockCap) && stockCap > 0 && nextQty > stockCap) {
+          showToast(`Only ${stockCap} available for "${product?.name || 'this item'}".`);
+          updated[existingIndex] = { ...updated[existingIndex], quantity: stockCap };
+        } else {
+          updated[existingIndex] = {
+            ...updated[existingIndex],
+            quantity: nextQty,
+          };
+        }
         return updated;
-      } else {
-        return [...prevCart, { product, quantity }];
       }
+
+      const firstQty =
+        Number.isFinite(stockCap) && stockCap > 0 ? Math.min(quantity, stockCap) : quantity;
+      return [...prevCart, { product, quantity: firstQty }];
     });
 
     showToast(`"${product?.name || 'Product'}" has been added to your cart.`);
+    trackAddToCart({
+      id: product?.id,
+      name: product?.name,
+      price: product?.sellingPrice ?? product?.price,
+      quantity,
+    });
   };
 
   const removeFromCart = (productId) => {

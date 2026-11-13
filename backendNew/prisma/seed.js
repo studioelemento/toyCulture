@@ -268,6 +268,33 @@ async function main() {
     });
     console.log("✅ Seeded sample coupon: TOY10 (10% off)");
 
+    const pincodes = [
+        { pincode: "560001", city: "Bengaluru", state: "Karnataka" },
+        { pincode: "560103", city: "Bengaluru", state: "Karnataka" },
+        { pincode: "110001", city: "New Delhi", state: "Delhi" },
+        { pincode: "400001", city: "Mumbai", state: "Maharashtra" },
+        { pincode: "600001", city: "Chennai", state: "Tamil Nadu" },
+        { pincode: "682001", city: "Kochi", state: "Kerala" },
+        { pincode: "500001", city: "Hyderabad", state: "Telangana" },
+        { pincode: "700001", city: "Kolkata", state: "West Bengal" },
+    ];
+
+    for (const row of pincodes) {
+        await prisma.serviceablePincode.upsert({
+            where: { pincode: row.pincode },
+            update: { ...row, is_active: true, cod_allowed: true },
+            create: {
+                ...row,
+                delivery_days_min: 3,
+                delivery_days_max: 6,
+                extra_delivery_fee: 0,
+                is_active: true,
+                cod_allowed: true,
+            },
+        });
+    }
+    console.log(`✅ Seeded ${pincodes.length} serviceable pincodes`);
+
     console.log("✨ Seeding completed successfully!");
 }
 

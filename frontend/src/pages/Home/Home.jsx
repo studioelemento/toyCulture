@@ -1,4 +1,6 @@
 import React from 'react';
+import PageSeo from '../../components/Common/PageSeo';
+import { SEO_DEFAULTS } from '../../lib/seo';
 import { Hero } from './components/Hero';
 import { Shopbyage } from './components/Shopbyage';
 import { ShopbyCategory } from './components/ShopbyCategory';
@@ -12,6 +14,7 @@ import { SubscribeNewsletter } from './components/SubscribeNewsletter';
 export const Home = () => {
   return (
     <div className="bg-[#FAF9F5] min-h-[calc(100vh-140px)] flex flex-col justify-between overflow-x-hidden selection:bg-toyOrange/20 selection:text-toyOrange">
+      <PageSeo title={SEO_DEFAULTS.title} description={SEO_DEFAULTS.description} image={SEO_DEFAULTS.image} />
       {/* Hero Section */}
       <Hero />
 

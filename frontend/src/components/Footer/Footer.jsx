@@ -1,8 +1,21 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, MapPin, Phone, ShieldCheck, Heart } from 'lucide-react';
+import { buildCategoryCards } from '../../lib/categories';
 
 export const Footer = () => {
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setCategories(buildCategoryCards(data.data, { requireProducts: true, maxItems: 5 }));
+        }
+      })
+      .catch(() => setCategories([]));
+  }, []);
   return (
     <footer className="bg-white text-toyText-primary border-t border-gray-200 mt-16">
       {/* Upper features highlights */}
@@ -105,21 +118,15 @@ export const Footer = () => {
             Popular Categories
           </h3>
           <ul className="space-y-2.5 text-gray-600 font-semibold">
-            <li>
-              <Link to="/category/diecast-toys" className="hover:text-toyOrange transition-colors">Diecast Toys</Link>
-            </li>
-            <li>
-              <Link to="/category/building-blocks-for-kids" className="hover:text-toyOrange transition-colors">Building Blocks</Link>
-            </li>
-            <li>
-              <Link to="/category/puzzles" className="hover:text-toyOrange transition-colors">Puzzles & Brain Teasers</Link>
-            </li>
-            <li>
-              <Link to="/category/diy-toys" className="hover:text-toyOrange transition-colors">DIY Craft Kits</Link>
-            </li>
-            <li>
-              <Link to="/category/role-play-toys" className="hover:text-toyOrange transition-colors">Role-Play Toys</Link>
-            </li>
+            {categories.length === 0 ? (
+              <li>
+                <Link to="/shop-by-category" className="hover:text-toyOrange transition-colors">Browse categories</Link>
+              </li>
+            ) : categories.map((cat) => (
+              <li key={cat.id}>
+                <Link to={cat.link} className="hover:text-toyOrange transition-colors">{cat.title}</Link>
+              </li>
+            ))}
           </ul>
         </div>
 

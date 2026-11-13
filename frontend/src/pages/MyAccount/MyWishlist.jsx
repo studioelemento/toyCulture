@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { productPath } from '../../lib/productSlug';
 import {
   LayoutDashboard,
   Package,
@@ -27,10 +28,6 @@ export default function MyWishlist() {
   const { currentUser, logout } = useAuth();
   const { addToCart, totalItemsCount } = useCart();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
@@ -417,7 +414,7 @@ export default function MyWishlist() {
                     {/* Middle Details Column */}
                     <div className="flex-1 min-w-0 pr-8">
                       {/* Title */}
-                      <Link to={`/product/${item.productId || item.id}`}>
+                      <Link to={productPath({ id: item.productId || item.id, name: item.name })}>
                         <h4 className="text-sm font-black text-[#0B1B3D] tracking-tight leading-snug line-clamp-2 hover:text-[#F96515] transition-colors">
                           {item.name}
                         </h4>
@@ -542,7 +539,7 @@ export default function MyWishlist() {
                       </div>
 
                       {/* Title */}
-                      <Link to={`/product/${item.productId || item.id}`}>
+                      <Link to={productPath({ id: item.productId || item.id, name: item.name })}>
                         <h4 className="text-xs sm:text-sm font-black text-[#0B1B3D] line-clamp-2 leading-snug tracking-tight mb-1.5 h-9 sm:h-10 hover:text-[#F96515] transition-colors">
                           {item.name}
                         </h4>

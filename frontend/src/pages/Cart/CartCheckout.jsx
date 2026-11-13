@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   UserCircle, 
@@ -19,6 +19,9 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/apiClient';
 import { requireLoginForPurchase } from '../../lib/requireLoginAction';
 import { accountIdentity, extractList, formatAddress } from '../../lib/accountHelpers';
+import { openRazorpayCheckout } from '../../lib/razorpayCheckout';
+import { trackBeginCheckout, trackPurchase } from '../../lib/analytics';
+import { fetchPincodeDelivery } from '../../lib/shipping';
 
 const CartCheckout = () => {
   const navigate = useNavigate();
@@ -31,6 +34,19 @@ const CartCheckout = () => {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [placeError, setPlaceError] = useState('');
+  const [isPlacing, setIsPlacing] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponMessage, setCouponMessage] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+  const [pinDelivery, setPinDelivery] = useState(null);
+  const [pinCheckError, setPinCheckError] = useState('');
+
+  const checkoutShippingFee =
+    pinDelivery?.serviceable && pinDelivery.delivery_fee != null
+      ? pinDelivery.delivery_fee
+      : shippingFee;
+  const payableTotal = Math.max(0, subtotal - couponDiscount + checkoutShippingFee);
 
   useEffect(() => {
     let alive = true;
@@ -74,8 +90,77 @@ const CartCheckout = () => {
     }
   }, [isBootstrapping, isLoggedIn, navigate, openAuthDrawer, showToast]);
 
+  useEffect(() => {
+    const active =
+      addresses.find((a) => a.id === selectedAddress) || addresses[0];
+    const pin = active?.pin;
+  if (!pin) {
+      setPinDelivery(null);
+      setPinCheckError('');
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const info = await fetchPincodeDelivery(pin, subtotal);
+        if (!alive) return;
+        setPinDelivery(info);
+        setPinCheckError(info.serviceable ? '' : info.message || 'Not serviceable');
+        if (info.serviceable && info.cod_allowed === false && selectedPayment === 'cod') {
+          setSelectedPayment('upi');
+          showToast?.('COD is not available for this pincode — switched to online payment.');
+        }
+      } catch (err) {
+        if (alive) {
+          setPinDelivery(null);
+          setPinCheckError(err.message || 'Could not verify pincode');
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [selectedAddress, addresses, subtotal, selectedPayment, showToast]);
+
+  const checkoutTracked = useRef(false);
+  useEffect(() => {
+    if (checkoutTracked.current || cart.length === 0) return;
+    checkoutTracked.current = true;
+    trackBeginCheckout({
+      value: payableTotal,
+      items: cart.map((item) => ({
+        item_id: item.product?.id || item.id,
+        item_name: item.product?.name,
+        quantity: item.quantity || 1,
+      })),
+    });
+  }, [cart, payableTotal]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    try {
+      setCouponMessage('');
+      const data = await api.post('/api/order/validate-coupon', {
+        code: couponCode.trim(),
+        subtotal,
+      });
+      setCouponDiscount(Number(data.data?.discount) || 0);
+      setAppliedCoupon(data.data?.code || couponCode.trim().toUpperCase());
+      setCouponMessage('Coupon applied successfully.');
+      showToast?.('Coupon applied.');
+    } catch (err) {
+      setCouponDiscount(0);
+      setAppliedCoupon('');
+      setCouponMessage(err.message || 'Invalid coupon');
+    }
+  };
+
   const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
+    if (pinDelivery && !pinDelivery.serviceable) {
+      setPlaceError(pinCheckError || 'Delivery is not available for the selected address.');
+      return;
+    }
     if (
       !requireLoginForPurchase({
         isLoggedIn,
@@ -94,8 +179,10 @@ const CartCheckout = () => {
         return;
       }
       setPlaceError('');
+      setIsPlacing(true);
       const payload = {
         payment_method: selectedPayment === 'cod' ? 'COD' : (selectedPayment === 'wallet' ? 'WALLET' : 'RAZORPAY'),
+        coupon_code: appliedCoupon || undefined,
         order_items: cart.map((item) => ({
           product_id: item.product?.id || item.id,
           quantity: item.quantity || 1,
@@ -112,15 +199,45 @@ const CartCheckout = () => {
       };
 
       const data = await api.post('/api/order', payload);
-      if (data.data?.order_number || data.data?.id) {
-        setOrderId(data.data.order_number || data.data.id);
+      const order = data.data;
+
+      if (data.payment) {
+        try {
+          const rzResponse = await openRazorpayCheckout(data.payment);
+          await api.post('/api/order/verify-payment', {
+            order_id: order.id,
+            razorpay_order_id: rzResponse.razorpay_order_id,
+            razorpay_payment_id: rzResponse.razorpay_payment_id,
+            razorpay_signature: rzResponse.razorpay_signature,
+          });
+        } catch (payErr) {
+          setPlaceError(
+            payErr.message || 'Payment was not completed. Your order is saved — retry payment from My Orders.'
+          );
+          return;
+        }
+      }
+
+      if (order?.order_number || order?.id) {
+        setOrderId(order.order_number || order.id);
         setOrderPlaced(true);
         clearCart();
+        trackPurchase({
+          transactionId: order.order_number || order.id,
+          value: order.total_amount ?? payableTotal,
+          items: cart.map((item) => ({
+            item_id: item.product?.id || item.id,
+            item_name: item.product?.name,
+            quantity: item.quantity,
+          })),
+        });
       } else {
         setPlaceError(data.message || 'Could not place order.');
       }
     } catch (err) {
       setPlaceError(err.message || 'Could not place order.');
+    } finally {
+      setIsPlacing(false);
     }
   };
 
@@ -279,6 +396,20 @@ const CartCheckout = () => {
                 Add New Address
               </button>
 
+              {pinDelivery?.serviceable ? (
+                <p className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 mb-3">
+                  Delivery to {pinDelivery.pincode}
+                  {pinDelivery.city ? ` (${pinDelivery.city})` : ''} in{' '}
+                  {pinDelivery.delivery_days_min}–{pinDelivery.delivery_days_max} business days.
+                  {pinDelivery.cod_allowed === false ? ' Online payment only for this pincode.' : ''}
+                </p>
+              ) : null}
+              {pinCheckError ? (
+                <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2 mb-3">
+                  {pinCheckError}
+                </p>
+              ) : null}
+
               <label className="flex items-center gap-3 cursor-pointer mt-2 sm:mt-0">
                 <div className="relative flex items-center justify-center">
                   <input type="checkbox" defaultChecked className="w-5 h-5 sm:w-4 sm:h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer peer appearance-none checked:bg-blue-600 checked:border-blue-600 bg-white border-2 sm:border" />
@@ -300,6 +431,33 @@ const CartCheckout = () => {
               <div className="sm:hidden mb-4"></div>
 
               <div className="space-y-3 sm:space-y-4">
+
+                {/* Cash on Delivery */}
+                <div
+                  onClick={() => {
+                    if (pinDelivery?.cod_allowed === false) {
+                      showToast?.('Cash on delivery is not available for this pincode.');
+                      return;
+                    }
+                    setSelectedPayment('cod');
+                  }}
+                  className={`border rounded-xl p-3.5 sm:p-4 flex items-center gap-3 sm:gap-4 transition-all ${
+                    pinDelivery?.cod_allowed === false
+                      ? 'opacity-50 cursor-not-allowed border-gray-200'
+                      : `cursor-pointer ${selectedPayment === 'cod' ? 'border-blue-500 bg-blue-50/10 sm:bg-blue-50/30' : 'border-gray-200 hover:border-gray-300'}`
+                  }`}
+                >
+                  <div className={`w-5 h-5 sm:w-4 sm:h-4 rounded-full border-2 sm:border flex items-center justify-center flex-shrink-0 ${selectedPayment === 'cod' ? 'border-blue-600 sm:border-blue-500' : 'border-gray-300'}`}>
+                    {selectedPayment === 'cod' && <div className="w-2.5 h-2.5 sm:w-2 sm:h-2 rounded-full bg-blue-600 sm:bg-blue-500" />}
+                  </div>
+                  <div className="w-8 h-8 sm:bg-gray-50 rounded flex items-center justify-center flex-shrink-0 sm:border sm:border-gray-100">
+                    <PackageCheck className="w-5 h-5 text-[#0F243E]" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-bold text-[#0F243E] sm:text-gray-900 text-[15px] sm:text-sm mb-0.5">Cash on Delivery</div>
+                    <div className="text-[13px] sm:text-xs text-[#64748b] sm:text-gray-500 leading-tight">Pay when your toys arrive</div>
+                  </div>
+                </div>
                 
                 {/* UPI */}
                 <div 
@@ -409,11 +567,11 @@ const CartCheckout = () => {
               {placeError ? <p className="text-sm text-rose-600 font-medium mb-2">{placeError}</p> : null}
               <button 
                 onClick={handlePlaceOrder}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || isPlacing}
                 className="w-full bg-[#ff5a00] hover:bg-[#e65200] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] hover:shadow-[0_6px_20px_rgba(255,90,0,0.23)] text-lg cursor-pointer"
               >
                 <Lock className="w-5 h-5 mr-1" />
-                Place Order <span className="font-medium mx-1">•</span> ₹{grandTotal.toLocaleString('en-IN')}
+                {isPlacing ? 'Placing order…' : 'Place Order'} <span className="font-medium mx-1">•</span> ₹{payableTotal.toLocaleString('en-IN')}
               </button>
               <div className="text-center text-xs text-gray-500 mt-4">
                 By placing your order, you agree to our <Link to="/terms" className="text-blue-600 hover:underline font-semibold">Terms & Conditions</Link> and <Link to="/privacy" className="text-blue-600 hover:underline font-semibold">Privacy Policy</Link>.
@@ -466,21 +624,52 @@ const CartCheckout = () => {
                 )}
               </div>
 
+              <div className="mb-4 p-3 sm:p-4 border border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+                <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Coupon code</label>
+                <div className="flex gap-2 mt-2">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. TOY10"
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-semibold uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCoupon}
+                    className="bg-[#0F243E] text-white text-sm font-bold px-4 rounded-lg hover:bg-[#1a3354]"
+                  >
+                    Apply
+                  </button>
+                </div>
+                {couponMessage ? (
+                  <p className={`text-xs mt-2 font-medium ${couponDiscount > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {couponMessage}
+                  </p>
+                ) : null}
+              </div>
+
               <div className="hidden sm:block space-y-3 text-[14px] mb-6 border-y border-gray-100 py-4">
                 <div className="flex justify-between text-gray-600">
                   <span className="font-medium">Subtotal</span>
                   <span className="font-bold text-gray-900">₹{subtotal.toLocaleString('en-IN')}</span>
                 </div>
+                {couponDiscount > 0 ? (
+                  <div className="flex justify-between text-emerald-700">
+                    <span className="font-medium">Coupon ({appliedCoupon})</span>
+                    <span className="font-bold">-₹{couponDiscount.toLocaleString('en-IN')}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-gray-600 items-center">
                   <span className="flex items-center gap-1.5 font-medium">
                     Shipping 
                     <span className="w-3.5 h-3.5 border border-gray-300 rounded-full text-[9px] flex items-center justify-center text-gray-400 cursor-help" title="Free delivery on orders over ₹2,000">i</span>
                   </span>
-                  <span className={`font-bold ${shippingFee === 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
-                    {shippingFee === 0 ? 'FREE' : `₹${shippingFee.toLocaleString('en-IN')}`}
+                  <span className={`font-bold ${checkoutShippingFee === 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                    {checkoutShippingFee === 0 ? 'FREE' : `₹${checkoutShippingFee.toLocaleString('en-IN')}`}
                   </span>
                 </div>
-                {shippingFee === 0 && (
+                {checkoutShippingFee === 0 && (
                   <div className="text-[11px] text-emerald-600 -mt-1 font-semibold">Free shipping unlocked!</div>
                 )}
               </div>
@@ -490,7 +679,7 @@ const CartCheckout = () => {
                    <span className="text-lg font-bold text-gray-900">Total</span>
                    <span className="text-xs text-gray-500 font-medium">(incl. of all taxes)</span>
                 </div>
-                <span className="text-2xl font-black text-[#1e293b]">₹{grandTotal.toLocaleString('en-IN')}</span>
+                <span className="text-2xl font-black text-[#1e293b]">₹{payableTotal.toLocaleString('en-IN')}</span>
               </div>
 
               <div className="hidden sm:flex bg-green-50 border border-green-100 rounded-xl p-4 items-start gap-3 mb-8">
@@ -549,11 +738,11 @@ const CartCheckout = () => {
             <div className="sm:hidden mt-6">
               <button 
                 onClick={handlePlaceOrder}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || isPlacing}
                 className="w-full bg-[#ff5a00] hover:bg-[#e65200] disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] text-[16px] cursor-pointer"
               >
                 <Lock className="w-5 h-5 mr-1" />
-                Place Order <span className="font-medium mx-1">•</span> ₹{grandTotal.toLocaleString('en-IN')}
+                {isPlacing ? 'Placing order…' : 'Place Order'} <span className="font-medium mx-1">•</span> ₹{payableTotal.toLocaleString('en-IN')}
               </button>
               <div className="text-center text-xs text-gray-500 mt-4">
                 By placing your order, you agree to our <br/><Link to="/terms" className="text-blue-600 hover:underline font-semibold">Terms & Conditions</Link> and <Link to="/privacy" className="text-blue-600 hover:underline font-semibold">Privacy Policy</Link>.

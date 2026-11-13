@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import PageSeo from '../../../components/Common/PageSeo';
+import {
+  buildAbsoluteUrl,
+  buildBreadcrumbJsonLd,
+  buildJsonLdGraph,
+  buildProductJsonLd,
+  productSeoFromRecord,
+} from '../../../lib/seo';
+import { getProductSlug, stripLegacySlugSuffix } from '../../../lib/productSlug';
 import { 
   ChevronRight, Heart, Star, CheckCircle2, Minus, Plus, ShoppingCart, Zap, 
   ShieldCheck, CreditCard, Truck, RotateCcw, ChevronDown, Smile, Layers, Car,
@@ -74,6 +83,47 @@ const SingleProduct = () => {
 
   useEffect(() => { fetchReviews(); }, [id]);
 
+  const pageSeo = useMemo(() => {
+    if (!product) {
+      return {
+        title: 'Product',
+        description: 'View product details, prices and reviews on Toy Culture.',
+        image: undefined,
+        jsonLd: null,
+      };
+    }
+
+    const { title, description } = productSeoFromRecord(product);
+    const gallery =
+      Array.isArray(product.images) && product.images.length > 0
+        ? product.images
+        : [product.image].filter(Boolean);
+    const image = gallery[0];
+    const slug = getProductSlug(product);
+    const productRoute = `/product/${slug}`;
+    const canonical = buildAbsoluteUrl(productRoute);
+
+    const jsonLd = buildJsonLdGraph(
+      buildProductJsonLd(product, canonical),
+      buildBreadcrumbJsonLd([
+        { name: 'Home', url: '/' },
+        { name: 'Shop', url: '/shop' },
+        { name: product.name, url: productRoute },
+      ])
+    );
+
+    return { title, description, image, jsonLd, productRoute };
+  }, [product, id]);
+
+  useEffect(() => {
+    if (!product) return;
+    const canonicalSlug = getProductSlug(product);
+    const currentSlug = stripLegacySlugSuffix(id);
+    if (currentSlug !== canonicalSlug) {
+      navigate(`/product/${canonicalSlug}`, { replace: true });
+    }
+  }, [product, id, navigate]);
+
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     if (
@@ -119,6 +169,11 @@ const SingleProduct = () => {
   if (loadingProduct) {
     return (
       <div className="w-full bg-[#f8fafc] min-h-[60vh] flex flex-col items-center justify-center py-20">
+        <PageSeo
+          title={pageSeo.title}
+          description={pageSeo.description}
+          pathname={`/product/${id}`}
+        />
         <div className="w-10 h-10 border-4 border-[#F96515] border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-sm font-semibold text-gray-500">Loading product details...</p>
       </div>
@@ -128,6 +183,12 @@ const SingleProduct = () => {
   if (errorProduct || !product) {
     return (
       <div className="w-full bg-[#f8fafc] min-h-[60vh] flex flex-col items-center justify-center py-16 px-4 text-center">
+        <PageSeo
+          title="Product Not Found"
+          description="This product is unavailable. Browse toys by category and age at Toy Culture."
+          pathname={`/product/${id}`}
+          robots="noindex, follow"
+        />
         <div className="w-20 h-20 rounded-3xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-3xl mb-4 shadow-xs">
           🧸
         </div>
@@ -167,6 +228,14 @@ const SingleProduct = () => {
 
   return (
     <div className="w-full bg-[#f8fafc] min-h-screen pb-12 font-sans text-[#0F243E]">
+      <PageSeo
+        title={pageSeo.title}
+        description={pageSeo.description}
+        image={pageSeo.image}
+        type="product"
+        pathname={pageSeo.productRoute}
+        jsonLd={pageSeo.jsonLd}
+      />
       {/* Breadcrumb */}
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex items-center text-[13px] text-gray-500 gap-1.5">

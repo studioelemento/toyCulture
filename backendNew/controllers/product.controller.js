@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma.js";
 import { logger } from "../utils/logger.js";
+import { buildProductSlug, parseProductSlugParam } from "../utils/productSlug.js";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const FALLBACK_IMAGE =
@@ -52,6 +53,7 @@ const formatProductForStorefront = (p) => {
     return {
         ...p,
         id:             p.id,
+        slug:           buildProductSlug(p.name || p.title),
         name:           p.name,
         title:          p.title || p.name,
         brand_id:       p.brand_id,
@@ -108,7 +110,7 @@ export const getAllProducts = async (req, res, next) => {
         // ── Sorting & pagination ─────────────────────────────────────────
         const pageNum  = Math.max(Number(page) || 1, 1);
         const limitNum = Math.min(Math.max(Number(rawLimit) || 20, 1), 100);
-        const sortField = ["price", "name", "createdAt"].includes(sort) ? sort : "createdAt";
+        const sortField = ["price", "name", "createdAt", "discount"].includes(sort) ? sort : "createdAt";
         const sortOrder = order === "asc" ? "asc" : "desc";
 
         const [products, total] = await Promise.all([
@@ -144,33 +146,45 @@ export const getAllProducts = async (req, res, next) => {
 export const getProductById = async (req, res, next) => {
     try {
         const { id } = req.params;
+        const parsed = parseProductSlugParam(id);
 
         let product = null;
 
-        // Try exact ID lookup first
-        try {
-            product = await prisma.product.findUnique({
-                where:   { id },
-                include: STOREFRONT_INCLUDES,
-            });
-        } catch {
-            product = null;
-        }
-
-        // If not found by ID, try searching by slug / name
-        if (!product) {
-            const cleanWords = id.replace(/-/g, " ").trim();
+        if (parsed.kind === "uuid") {
             product = await prisma.product.findFirst({
                 where: {
+                    id: parsed.id,
                     is_active: true,
                     deletedAt: null,
-                    OR: [
-                        { name:  { contains: cleanWords, mode: "insensitive" } },
-                        { title: { contains: cleanWords, mode: "insensitive" } },
-                    ],
                 },
                 include: STOREFRONT_INCLUDES,
             });
+        } else if (parsed.kind === "slug") {
+            if (parsed.idPrefix) {
+                product = await prisma.product.findFirst({
+                    where: {
+                        is_active: true,
+                        deletedAt: null,
+                        id: { startsWith: parsed.idPrefix },
+                    },
+                    include: STOREFRONT_INCLUDES,
+                });
+            }
+
+            if (!product && parsed.cleanSlug) {
+                const catalog = await prisma.product.findMany({
+                    where: { is_active: true, deletedAt: null },
+                    include: STOREFRONT_INCLUDES,
+                });
+                const matches = catalog.filter(
+                    (p) => buildProductSlug(p.name || p.title) === parsed.cleanSlug
+                );
+                if (matches.length === 1) {
+                    product = matches[0];
+                } else if (matches.length > 1) {
+                    product = matches[0];
+                }
+            }
         }
 
         if (!product) {

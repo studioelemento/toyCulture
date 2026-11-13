@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Eye, ShoppingBag, Check } from 'lucide-react';
 import { StarRating } from '../Rating/StarRating';
 import { useCart } from '../../context/CartContext';
+import { getProductSlug, productPath } from '../../lib/productSlug';
 import { QuickViewModal } from './QuickViewModal';
 
 export const ProductCard = ({ product }) => {
@@ -10,8 +11,8 @@ export const ProductCard = ({ product }) => {
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const { addToCart, cart } = useCart();
 
-  const productId = product?.id || product?.slug;
-  const productPath = `/product/${productId}`;
+  const productId = product?.id || getProductSlug(product);
+  const productLink = productPath(product);
 
   const isInCart = cart.some((item) => (item.product?.id || item.id) === productId);
 
@@ -50,7 +51,7 @@ export const ProductCard = ({ product }) => {
           </div>
 
           {/* Product Image Link with Hover Swap */}
-          <Link to={productPath} className="w-full h-full flex items-center justify-center">
+          <Link to={productLink} className="w-full h-full flex items-center justify-center">
             <img
               src={isHovered ? hoverImage : mainImage}
               alt={product?.name || 'Product'}
@@ -102,7 +103,7 @@ export const ProductCard = ({ product }) => {
 
             {/* Product Title */}
             <h3 className="text-xs md:text-sm font-bold text-toyText-heading line-clamp-2 mb-2 group-hover:text-toyOrange transition-colors leading-snug">
-              <Link to={productPath}>{product?.name}</Link>
+              <Link to={productLink}>{product?.name}</Link>
             </h3>
 
             {/* Rating */}

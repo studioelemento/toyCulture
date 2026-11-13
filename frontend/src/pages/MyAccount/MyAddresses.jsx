@@ -27,10 +27,6 @@ export default function MyAddresses() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items

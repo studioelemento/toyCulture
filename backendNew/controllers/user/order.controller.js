@@ -1,6 +1,8 @@
 import { prisma } from "../../config/prisma.js";
 import { placeOrderValidator, orderSearchValidator } from "../../validators/orderValidator.js";
 import { createOrderService } from "../../services/user/order.service.js";
+import { verifyShopOrderPayment } from "../../services/user/orderPayment.service.js";
+import { validateCouponForUser } from "../../services/user/couponValidate.service.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
 
@@ -17,11 +19,14 @@ export const addOrderController = async (req, res, next) => {
             throw new ErrorWithStatus("Unauthorized", HTTP_RES.UNAUTHORIZED);
         }
 
-        const order = await createOrderService(currentUserEmail, value);
+        const result = await createOrderService(currentUserEmail, value);
         return res.status(201).json({
             status:  "success",
-            message: "Order placed successfully",
-            data:    order,
+            message: result.razorpayCheckout
+                ? "Order created. Complete payment to confirm."
+                : "Order placed successfully",
+            data:    result.order,
+            payment: result.razorpayCheckout || null,
         });
     } catch (error) {
         next(error);
@@ -245,6 +250,41 @@ export const cancelPayment = async (_req, res) => {
     return res.status(200).json({ status: "success", message: "Payment cancelled" });
 };
 
-export const verifyPayment = async (_req, res) => {
-    return res.status(200).json({ status: "success", message: "Payment verified successfully" });
+export const verifyPayment = async (req, res, next) => {
+    try {
+        const currentUserEmail = req.email || req.user?.email;
+        if (!currentUserEmail) {
+            throw new ErrorWithStatus("Unauthorized", HTTP_RES.UNAUTHORIZED);
+        }
+        const order = await verifyShopOrderPayment(currentUserEmail, req.body);
+        return res.status(200).json({
+            status:  "success",
+            message: "Payment verified successfully",
+            data:    order,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const validateCouponController = async (req, res, next) => {
+    try {
+        const currentUserEmail = req.email || req.user?.email;
+        const user = currentUserEmail
+            ? await prisma.user.findUnique({ where: { email: currentUserEmail } })
+            : null;
+        const { code, subtotal } = req.body || {};
+        const result = await validateCouponForUser({
+            code,
+            subtotal,
+            userId: user?.id,
+        });
+        return res.status(200).json({
+            status:  "success",
+            message: "Coupon applied",
+            data:    result,
+        });
+    } catch (error) {
+        next(error);
+    }
 };

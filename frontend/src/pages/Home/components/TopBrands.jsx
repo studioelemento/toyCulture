@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Award } from 'lucide-react';
+import { buildBrandCards } from '../../../lib/brands';
 
 export const TopBrands = () => {
   const [brands, setBrands] = useState([]);
@@ -11,7 +12,7 @@ export const TopBrands = () => {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
-          setBrands(data.data);
+          setBrands(buildBrandCards(data.data));
         }
       })
       .catch((err) => console.error('Error fetching brands:', err))
@@ -50,7 +51,7 @@ export const TopBrands = () => {
               {brands.map((brand) => (
                 <Link
                   key={brand.id}
-                  to={`/shop?brand=${encodeURIComponent(brand.name)}`}
+                  to={brand.link}
                   className="group bg-white rounded-2xl border border-[#ECEFF2] p-4 flex flex-col items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,0.02)] hover:shadow-md hover:border-[#F96515]/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer aspect-square text-center"
                 >
                   <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
@@ -60,7 +61,7 @@ export const TopBrands = () => {
                     {brand.name}
                   </span>
                   <span className="text-[10px] text-slate-400 mt-0.5">
-                    {brand.productCount || 0} items
+                    {brand.count ?? brand.productCount ?? 0} items
                   </span>
                 </Link>
               ))}
@@ -71,7 +72,7 @@ export const TopBrands = () => {
               {brands.map((brand) => (
                 <Link
                   key={brand.id}
-                  to={`/shop?brand=${encodeURIComponent(brand.name)}`}
+                  to={brand.link}
                   className="bg-white rounded-2xl border border-[#ECEFF2] p-4 flex flex-col items-center justify-center shadow-xs active:scale-98 transition-all aspect-[4/3] text-center"
                 >
                   <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-2">
@@ -81,7 +82,7 @@ export const TopBrands = () => {
                     {brand.name}
                   </span>
                   <span className="text-[10px] text-slate-400 mt-0.5">
-                    {brand.productCount || 0} items
+                    {brand.count ?? brand.productCount ?? 0} items
                   </span>
                 </Link>
               ))}

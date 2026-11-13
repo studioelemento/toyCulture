@@ -1,85 +1,52 @@
 import Joi from "joi";
 import { validator } from "../validator.js";
-const couponSchema = Joi.object({
-    code: Joi.string().allow(null).empty('').optional().pattern(/^[A-Z0-9-]+$/)
-.min(7).max(9).uppercase().messages({
-        "string.min": "Coupon code must be at least 7 characters long",
-        "string.max": "Coupon code must be at most 9 characters",
-    }),
-    name: Joi.string()
-        .min(2)
-        .max(50)
-        .messages({
-            "string.min": "Coupon Name should be greater than 2 chars",
-            "string.max": "Coupon Name should be less than 50 chars",
-        }),
-    description: Joi.string()
-        .min(2)
-        .max(150)
-        .messages({
-            "string.min": "Coupon Description should be greater than 2 chars",
-            "string.max": "Coupon Description should be less than 150 chars",
-        }),
-    discount_percentage: Joi.number()
-        .required()
-        .min(1)
-        .max(100)
-        .precision(2)
-        .messages({
-            "number.base": "Discount Percentage must be a number.",
-            "number.min": "Discount Percentage must be 0 or more.",
-            "number.max": "Discount Percentage cannot exceed 100.",
-            "any.required": "Discount Percentage is required.",
-        }),
-    max_discount_amount: Joi.number().min(0).required().messages({
-        "number.base": "Max Discount Amount must be a number.",
-        "number.min": "Max Discount Amount must be 0 or more.",
-        "any.required": "Max Discount Amount is required.",
-    }),
-    min_order_amount: Joi.number().min(0).required().messages({
-        "number.base": "Minimum Order Amount must be a number.",
-        "number.min": "Minimum Order Amount must be 0 or more.",
-        "any.required": "Minimum Order Amount is required.",
-    }),
-    expiry_date: Joi.date()
-        .greater("now")
-        .required()
-        .custom((value) => {
-            const date = new Date(value);
-            console.log(date,)
-            return date;
-        })
-        .messages({
-            "date.base": "Expiry Date must be a valid date.",
-            "date.greater":
-                "Expiry Date must be in the future (tomorrow or later).",
-            "any.required": "Expiry Date is required.",
-        }),
 
-    for_user: Joi.string()
-       .allow(null)
-        .empty('')
-   // Removes the key if null, empty string, or undefined.
-         .optional()  // Ensures Joi treats it as not required
-        .uuid({ version: ['uuidv4', 'uuidv1'] })
-        .messages({
-            'string.guid': 'User ID must be a valid UUID.',
-        }),
-    usage_limit: Joi.number()
-        .integer()
-        .required()
-        .when("for_user", {
-            is: Joi.exist(),
-            then: Joi.number()
-                .valid(1)
-                .messages({
-                    "any.only": "Usage limit must be 1 for specific user",
-                }),
-            otherwise: Joi.number().min(1).messages({
-                "number.min":
-                    "Usage limit must be 1 or more for general coupons.",
-            }),
-        }),
+const codeSchema = Joi.string()
+  .uppercase()
+  .pattern(/^[A-Z0-9-]+$/)
+  .min(7)
+  .max(9)
+  .messages({
+    "string.pattern.base": "Code may only contain A–Z, 0–9, and hyphens",
+    "string.min": "Coupon code must be at least 7 characters",
+    "string.max": "Coupon code must be at most 9 characters",
+  });
+
+const couponFields = {
+  code: codeSchema.required(),
+  description: Joi.string().max(150).allow("", null).optional(),
+  type: Joi.string().valid("PERCENTAGE", "FIXED").required(),
+  value: Joi.number().positive().precision(2).required(),
+  min_order_amount: Joi.number().min(0).default(0),
+  max_discount: Joi.number().min(0).allow(null).optional(),
+  usage_limit: Joi.number().integer().min(1).allow(null).optional(),
+  per_user_limit: Joi.number().integer().min(1).default(1),
+  valid_until: Joi.date().required().messages({
+    "date.base": "Valid until must be a valid date",
+    "any.required": "Valid until is required",
+  }),
+  is_active: Joi.boolean().optional(),
+};
+
+const createCouponSchema = Joi.object({
+  ...couponFields,
+  valid_until: couponFields.valid_until.greater("now").messages({
+    "date.greater": "Valid until must be in the future",
+  }),
+  value: Joi.when("type", {
+    is: "PERCENTAGE",
+    then: Joi.number().min(1).max(100).precision(2).required(),
+    otherwise: Joi.number().positive().precision(2).required(),
+  }),
 });
 
-export const couponValidator = validator(couponSchema);
+const editCouponSchema = Joi.object({
+  ...couponFields,
+  code: codeSchema.optional(),
+  type: Joi.string().valid("PERCENTAGE", "FIXED").optional(),
+  value: Joi.number().positive().precision(2).optional(),
+  valid_until: Joi.date().optional(),
+}).min(1);
+
+export const couponValidator = validator(createCouponSchema);
+export const editCouponValidator = validator(editCouponSchema);

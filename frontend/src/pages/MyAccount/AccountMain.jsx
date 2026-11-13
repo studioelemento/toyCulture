@@ -19,6 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/apiClient';
 import { accountIdentity, extractList, formatAddress, mapStoreOrder } from '../../lib/accountHelpers';
+import { buildCategoryCards } from '../../lib/categories';
 
 export default function AccountMain() {
   const { currentUser, logout } = useAuth();
@@ -49,7 +50,7 @@ export default function AccountMain() {
         setWishlistCount(wishItems.length);
         setCouponCount(extractList(couponRes).length);
         setAddresses(extractList(addrRes).map(formatAddress).filter(Boolean));
-        setCategories(extractList(catRes).filter((c) => !c.parent_id).slice(0, 6));
+        setCategories(buildCategoryCards(extractList(catRes), { requireProducts: true, maxItems: 6 }));
       } catch {
         if (alive) {
           setOrders([]);
@@ -196,9 +197,10 @@ export default function AccountMain() {
 
   const categoriesList = categories.map((cat) => ({
     id: cat.id,
-    name: cat.name,
+    name: cat.title,
     count: `${cat.productCount ?? 0} products`,
     slug: cat.id,
+    link: cat.link,
   }));
 
   const handleLogout = () => {
@@ -596,7 +598,7 @@ export default function AccountMain() {
                 {categoriesList.map((cat) => (
                   <Link
                     key={cat.id}
-                    to={`/category/${cat.slug}`}
+                    to={cat.link}
                     className="flex flex-col items-center p-3 rounded-2xl border border-slate-100 bg-[#FAFAFC] hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all duration-200 group text-center"
                   >
                     <div className="w-20 h-20 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-center overflow-hidden mb-2.5 p-1 group-hover:scale-105 transition-transform">

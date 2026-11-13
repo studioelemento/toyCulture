@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -26,10 +26,6 @@ import { accountIdentity } from '../../lib/accountHelpers';
 export default function HelpSupport() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
 
   const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 

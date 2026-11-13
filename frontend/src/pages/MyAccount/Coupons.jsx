@@ -24,10 +24,6 @@ export default function Coupons() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   const { displayName, displayEmail, initials } = accountIdentity(currentUser);
   const [coupons, setCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(true);

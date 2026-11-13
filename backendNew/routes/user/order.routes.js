@@ -1,5 +1,5 @@
 import express from 'express'
-import { addOrderController, cancelOrderItemController, cancelPayment, getAllOrderController, getOrderById, repayOrderController, requestCancellation, requestReturn, requestReturnItemController, verifyPayment } from '../../controllers/user/order.controller.js'
+import { addOrderController, cancelOrderItemController, cancelPayment, getAllOrderController, getOrderById, repayOrderController, requestCancellation, requestReturn, requestReturnItemController, validateCouponController, verifyPayment } from '../../controllers/user/order.controller.js'
 import { authenticateUser } from '../../middlewares/auth.middleware.js'
 
 const router = express.Router()
@@ -7,6 +7,7 @@ const router = express.Router()
 router.use(authenticateUser)
 
 router.post('', addOrderController)
+router.post('/validate-coupon', validateCouponController)
 router.get('', getAllOrderController)
 
 router.get('/:id',getOrderById)

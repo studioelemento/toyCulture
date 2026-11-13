@@ -5,6 +5,7 @@ import {
     getAllOrdersController,
     getOrderController,
     updateOrderStatus,
+    updateOrderShipment,
 } from "../../controllers/admin/order-management.controller.js";
 
 const router = express.Router();
@@ -14,6 +15,7 @@ router.use(checkAdminRole);
 
 router.get("/",    getAllOrdersController);
 router.get("/:id", getOrderController);
+router.patch("/:id/shipment", updateOrderShipment);
 router.patch("/:id/status", updateOrderStatus);
 
 export default router;

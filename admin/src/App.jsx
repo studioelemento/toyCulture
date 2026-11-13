@@ -13,6 +13,8 @@ import Brands from "./pages/Brands";
 import Categories from "./pages/Categories";
 import Reviews from "./pages/Reviews";
 import Customers from "./pages/Customers";
+import Coupons from "./pages/Coupons";
+import Shipping from "./pages/Shipping";
 
 export default function App() {
   return (
@@ -28,6 +30,8 @@ export default function App() {
               <Route path="products/edit/:id" element={<AddProduct />} />
               <Route path="products/:id/edit" element={<AddProduct />} />
               <Route path="orders" element={<Orders />} />
+              <Route path="coupons" element={<Coupons />} />
+              <Route path="shipping" element={<Shipping />} />
               <Route path="customers" element={<Customers />} />
               <Route path="catalog" element={<Catalog />} />
               <Route path="brands" element={<Brands />} />

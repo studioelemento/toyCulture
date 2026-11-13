@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Search, ChevronRight, User, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { buildCategoryCards } from '../../lib/categories';
 
 export const MobileNavDrawer = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,7 +16,7 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
         .then((res) => res.json())
         .then((data) => {
           if (data.success && Array.isArray(data.data)) {
-            setCategories(data.data);
+            setCategories(buildCategoryCards(data.data, { requireProducts: true }));
           }
         })
         .catch((err) => console.error('Failed to load categories:', err));
@@ -27,7 +28,7 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
+      navigate(`/shop?q=${encodeURIComponent(searchTerm.trim())}`);
       onClose();
     }
   };
@@ -88,11 +89,11 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
             categories.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/shop?category=${encodeURIComponent(cat.name)}`}
+                to={cat.link}
                 onClick={onClose}
                 className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-toyOrange/10 hover:text-toyOrange transition-colors"
               >
-                <span>{cat.name}</span>
+                <span>{cat.title}</span>
                 {cat.productCount > 0 && (
                   <span className="text-[10px] text-gray-400">({cat.productCount})</span>
                 )}

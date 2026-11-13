@@ -28,10 +28,6 @@ export default function PersonalDetails() {
   const { currentUser, logout, refreshSession } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   const [isEditing, setIsEditing] = useState(false);
   const identity = accountIdentity(currentUser);
   const [fullName, setFullName] = useState(identity.displayName === 'Guest' ? '' : identity.displayName);

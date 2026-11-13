@@ -3,6 +3,7 @@ import {
     getAllOrdersService,
     getOrderService,
     updateOrderStatusService,
+    updateOrderShipmentService,
 } from "../../services/admin/order-management.service.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
 import { orderStatusValidator } from "../../validators/orderValidator.js";
@@ -64,6 +65,21 @@ export const updateOrderStatus = async (req, res, next) => {
         });
     } catch (error) {
         logger.error("Admin updateOrderStatus failed:", error.message);
+        next(error);
+    }
+};
+
+export const updateOrderShipment = async (req, res, next) => {
+    try {
+        const { id: orderId } = req.params;
+        const updated = await updateOrderShipmentService(orderId, req.body);
+        return res.status(200).json({
+            success: true,
+            message: "Shipment details updated",
+            data: updated,
+        });
+    } catch (error) {
+        logger.error("Admin updateOrderShipment failed:", error.message);
         next(error);
     }
 };

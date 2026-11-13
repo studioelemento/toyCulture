@@ -4,8 +4,8 @@ import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import { MainLayout } from './layouts/MainLayout';
 import { Home } from './pages/Home/Home';
-import { Shopbyage } from './pages/Home/components/Shopbyage';
-import { ShopbyCategory } from './pages/Home/components/ShopbyCategory';
+import ShopByAgePage from './pages/Home/ShopByAgePage';
+import ShopByCategoryPage from './pages/Home/ShopByCategoryPage';
 import ShopHome from './pages/Home/Shop/ShopHome';
 import SingleProduct from './pages/Home/Shop/SingleProduct';
 import { ProductDetails } from './pages/ProductDetails';
@@ -22,6 +22,8 @@ import MyWishlist from './pages/MyAccount/MyWishlist';
 import HelpSupport from './pages/MyAccount/HelpSupport';
 import Coupons from './pages/MyAccount/Coupons';
 import ScrollToTop from './components/Common/ScrollToTop';
+import AppRouteSeo, { DocumentLang } from './components/Common/AppRouteSeo';
+import Analytics from './components/Common/Analytics';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 
 export default function App() {
@@ -29,14 +31,18 @@ export default function App() {
     <CartProvider>
       <AuthProvider>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <DocumentLang />
+          <Analytics />
+          <AppRouteSeo />
           <ScrollToTop />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<MainLayout />}>
               <Route index element={<Home />} />
               <Route path="shop" element={<ShopHome />} />
-              <Route path="shop-by-age" element={<Shopbyage />} />
-              <Route path="shop-by-category" element={<ShopbyCategory />} />
+              <Route path="search" element={<ShopHome />} />
+              <Route path="shop-by-age" element={<ShopByAgePage />} />
+              <Route path="shop-by-category" element={<ShopByCategoryPage />} />
               <Route path="product/:id" element={<SingleProduct />} />
               <Route path="cart" element={<CartPage />} />
               <Route path="checkout" element={<CartCheckout />} />

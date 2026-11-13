@@ -14,7 +14,11 @@ router.get("/", async (_req, res, next) => {
         name: true,
         parent_id: true,
         seo_description: true,
-        _count: { select: { products: true } },
+        _count: {
+          select: {
+            products: { where: { is_active: true, deletedAt: null } },
+          },
+        },
       },
     });
 

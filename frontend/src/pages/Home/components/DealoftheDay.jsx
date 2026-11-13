@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ShoppingCart, Star, Truck, Shield, Package } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
+import { mapApiProductCard, pickDealOfTheDay } from '../../../lib/storefrontProducts';
+import { productPath } from '../../../lib/productSlug';
 
 export const DealoftheDay = () => {
   const { addToCart } = useCart();
@@ -33,26 +35,12 @@ export const DealoftheDay = () => {
 
   // Fetch deal product from database
   useEffect(() => {
-    fetch('/api/v1/products?limit=1&sort=price&order=desc')
+    fetch('/api/v1/products?limit=100')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          const p = data.data[0];
-          setProduct({
-            id: p.id,
-            name: p.name,
-            slug: p.id,
-            brand: p.brand || 'ToyCulture',
-            price: p.price,
-            originalPrice: p.originalPrice || (p.price * 1.25).toFixed(0),
-            discount: p.discount || '20% OFF',
-            rating: p.rating || 4.8,
-            reviewsCount: p.reviews || 0,
-            image: p.image,
-            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
-            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
-          });
-        }
+        const list = data.success && Array.isArray(data.data) ? data.data : [];
+        const picked = pickDealOfTheDay(list);
+        if (picked) setProduct(mapApiProductCard(picked));
       })
       .catch((err) => console.error('Error fetching deal of the day:', err))
       .finally(() => setLoading(false));
@@ -161,7 +149,7 @@ export const DealoftheDay = () => {
                   {product.brand}
                 </span>
                 <Link
-                  to={`/product/${product.id}`}
+                  to={productPath(product)}
                   className="text-lg lg:text-xl font-black text-[#0F243E] hover:text-[#F96515] transition-colors leading-snug font-title block mt-1"
                 >
                   {product.name}

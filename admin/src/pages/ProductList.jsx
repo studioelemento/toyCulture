@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Package,
   PlusCircle,
@@ -13,11 +13,17 @@ import {
 } from "lucide-react";
 import { api } from "../lib/apiClient";
 
+const LOW_STOCK_THRESHOLD = 10;
+
 export default function ProductList() {
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
+  const [lowStockOnly, setLowStockOnly] = useState(
+    () => searchParams.get("lowStock") === "1"
+  );
 
   useEffect(() => {
     fetchProducts();
@@ -61,7 +67,10 @@ export default function ProductList() {
     const matchesCategory =
       selectedCategory === "ALL" || p.category === selectedCategory;
 
-    return matchesSearch && matchesCategory;
+    const stock = p.stockQTY ?? p.stock ?? 0;
+    const matchesStock = !lowStockOnly || stock < LOW_STOCK_THRESHOLD;
+
+    return matchesSearch && matchesCategory && matchesStock;
   });
 
   return (
@@ -125,6 +134,15 @@ export default function ProductList() {
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-2 text-xs text-slate-300 whitespace-nowrap cursor-pointer">
+            <input
+              type="checkbox"
+              checked={lowStockOnly}
+              onChange={(e) => setLowStockOnly(e.target.checked)}
+              className="rounded border-indigo-800"
+            />
+            Low stock (&lt;{LOW_STOCK_THRESHOLD})
+          </label>
         </div>
       </div>
 

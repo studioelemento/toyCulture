@@ -305,9 +305,15 @@ model Order {
   payment_method    PaymentMethod
   payment_status    PaymentStatus @default(PENDING)
   transaction_id    String? @unique
+  razorpay_order_id   String? @unique
+  razorpay_payment_id String?
+  subtotal            Float?  @default(0)
+  discount_amount     Float?  @default(0)
   shipping_address_id String
   status            OrderStatus @default(PLACED)
   status_history    Json        @default("[]")
+  tracking_number   String?
+  carrier           String?
   cancelled_at      DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -360,6 +366,20 @@ model Coupon {
   deletedAt     DateTime?
 
   usages        CouponUsage[]
+}
+
+model ServiceablePincode {
+  id                 String   @id @default(uuid())
+  pincode            String   @unique
+  city               String?
+  state              String?
+  cod_allowed        Boolean  @default(true)
+  delivery_days_min  Int      @default(3)
+  delivery_days_max  Int      @default(7)
+  extra_delivery_fee Float    @default(0)
+  is_active          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model CouponUsage {

@@ -54,13 +54,20 @@ export default function Orders() {
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [orderDetails, setOrderDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [carrier, setCarrier] = useState("BlueDart");
+  const [savingShipment, setSavingShipment] = useState(false);
 
   const handleOpenDetails = async (orderId) => {
     setSelectedOrderId(orderId);
     setDetailsLoading(true);
     try {
       const data = await api.get(`/api/admin/orders/${orderId}`);
-      if (data.data) setOrderDetails(data.data);
+      if (data.data) {
+        setOrderDetails(data.data);
+        setTrackingNumber(data.data.tracking_number || "");
+        setCarrier(data.data.carrier || "BlueDart");
+      }
     } catch (e) {
       console.error("Failed to load order details", e);
     } finally {
@@ -103,6 +110,31 @@ export default function Orders() {
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [statusFilter, searchTerm]);
+
+  const saveShipment = async () => {
+    if (!orderDetails?.id || !trackingNumber.trim()) {
+      alert("Enter a tracking number");
+      return;
+    }
+    setSavingShipment(true);
+    try {
+      const data = await api.patch(`/api/admin/orders/${orderDetails.id}/shipment`, {
+        tracking_number: trackingNumber.trim(),
+        carrier: carrier.trim(),
+        mark_shipped: true,
+      });
+      if (data.data) {
+        setOrderDetails(data.data);
+        setOrders((prev) =>
+          prev.map((o) => (o.id === data.data.id ? { ...o, status: data.data.status } : o))
+        );
+      }
+    } catch (err) {
+      alert(err.message || "Could not save shipment");
+    } finally {
+      setSavingShipment(false);
+    }
+  };
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
@@ -434,6 +466,40 @@ export default function Orders() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-sky-950/20 border border-sky-800/30 space-y-3">
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-sky-400" />
+                      Shipment & tracking
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <input
+                        value={carrier}
+                        onChange={(e) => setCarrier(e.target.value)}
+                        placeholder="Carrier"
+                        className="bg-[#0E1526] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                      <input
+                        value={trackingNumber}
+                        onChange={(e) => setTrackingNumber(e.target.value)}
+                        placeholder="Tracking number"
+                        className="bg-[#0E1526] border border-indigo-950 rounded-xl px-3 py-2 text-xs text-white"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingShipment}
+                      onClick={saveShipment}
+                      className="text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white px-4 py-2 rounded-xl disabled:opacity-50"
+                    >
+                      {savingShipment ? "Saving…" : "Save & mark shipped (sends customer email)"}
+                    </button>
+                    {orderDetails?.tracking_number ? (
+                      <p className="text-[11px] text-slate-400">
+                        Current: {orderDetails.carrier || "Courier"} · {orderDetails.tracking_number}
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Quick Status Transition inside Modal */}

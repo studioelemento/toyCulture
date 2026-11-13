@@ -60,10 +60,6 @@ export default function MyOrderDetailes() {
     return () => { isMounted = false; };
   }, [id, currentUser]);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
-
   const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
@@ -359,13 +355,28 @@ export default function MyOrderDetailes() {
               </div>
 
               {/* Track Again Button (Full width on mobile, matching mobile screenshot) */}
-              <button
-                onClick={() => alert('Tracking ID: TC-DEL-992384. Delivered successfully via BlueDart.')}
-                className="w-full flex items-center justify-center gap-2 text-xs font-bold text-[#2563EB] bg-white border border-[#BFDBFE] hover:bg-blue-50 py-3 rounded-2xl transition-colors shadow-xs"
-              >
-                <span>Track Again</span>
-                <ExternalLink size={14} />
-              </button>
+              {liveOrder?.tracking_number ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const msg = `${liveOrder.carrier || 'Courier'}: ${liveOrder.tracking_number}`;
+                    if (navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(liveOrder.tracking_number);
+                    }
+                    alert(`Tracking — ${msg}`);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-[#2563EB] bg-white border border-[#BFDBFE] hover:bg-blue-50 py-3 rounded-2xl transition-colors shadow-xs"
+                >
+                  <span>
+                    Track — {liveOrder.carrier || 'Courier'} ({liveOrder.tracking_number})
+                  </span>
+                  <ExternalLink size={14} />
+                </button>
+              ) : (
+                <p className="w-full text-center text-xs text-slate-500 py-3 rounded-2xl border border-slate-100 bg-white">
+                  Tracking will appear here once your order ships.
+                </p>
+              )}
 
             </div>
 

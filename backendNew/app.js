@@ -31,6 +31,7 @@ import stockManagementRouter    from "./routes/admin/stock-management.routes.js"
 import couponManagementRouter   from "./routes/admin/coupon-management.routes.js";
 import salesReportRouter        from "./routes/admin/salesReport.routes.js";
 import reviewManagementRouter   from "./routes/admin/review-management.routes.js";
+import adminShippingRouter      from "./routes/admin/shipping.routes.js";
 
 // User / customer routes
 import homeRouter     from "./routes/home.routes.js";
@@ -43,6 +44,7 @@ import wishlistRouter from "./routes/user/wishlist.routes.js";
 import reviewRouter   from "./routes/user/review.routes.js";
 import categoryRouter from "./routes/category.routes.js";
 import brandRouter    from "./routes/brand.routes.js";
+import shippingRouter from "./routes/shipping.routes.js";
 
 // ── App setup ───────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
@@ -77,6 +79,7 @@ app.use("/api/wishlist",     wishlistRouter);
 app.use("/api/reviews",      reviewRouter);
 app.use("/api/categories",   categoryRouter);
 app.use("/api/brands",       brandRouter);
+app.use("/api/shipping",     shippingRouter);
 
 // ── Admin API routes ─────────────────────────────────────────────────────────
 app.use("/api/admin/dashboard",        dashboardRouter);
@@ -89,6 +92,7 @@ app.use("/api/admin/stock",            stockManagementRouter);
 app.use("/api/admin/coupons",          couponManagementRouter);
 app.use("/api/admin/reports",          salesReportRouter);
 app.use("/api/admin/reviews",          reviewManagementRouter);
+app.use("/api/admin/shipping",         adminShippingRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, _res, next) => {

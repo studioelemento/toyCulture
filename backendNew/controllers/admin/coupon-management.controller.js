@@ -2,7 +2,7 @@ import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { addCouponService, editCouponService } from "../../services/admin/coupon-management.service.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
-import { couponValidator } from "../../validators/admin/couponValidator.js";
+import { couponValidator, editCouponValidator } from "../../validators/admin/couponValidator.js";
 import { logger } from "../../utils/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ export const getCouponByIdController = async (req, res, next) => {
 export const editCouponController = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { value, error } = couponValidator(req.body);
+        const { value, error } = editCouponValidator(req.body);
         if (error) {
             throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }

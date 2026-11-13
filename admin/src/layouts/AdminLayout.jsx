@@ -21,6 +21,8 @@ import {
   Sparkles,
   Star,
   Users,
+  Ticket,
+  Truck,
 } from "lucide-react";
 
 export default function AdminLayout() {
@@ -43,11 +45,12 @@ export default function AdminLayout() {
 
   const navItems = [
     { label: "Dashboard", path: "/", icon: LayoutDashboard },
+    { label: "Orders", path: "/orders", icon: ShoppingBag },
+    { label: "Coupons", path: "/coupons", icon: Ticket },
+    { label: "Shipping", path: "/shipping", icon: Truck },
     { label: "Products", path: "/products", icon: Package },
-    { label: "Add Product", path: "/products/new", icon: PlusCircle },
     { label: "Categories", path: "/categories", icon: FolderTree },
     { label: "Brands", path: "/brands", icon: Award },
-    { label: "Orders", path: "/orders", icon: ShoppingBag },
     { label: "Customers", path: "/customers", icon: Users },
     { label: "Reviews", path: "/reviews", icon: Star },
   ];

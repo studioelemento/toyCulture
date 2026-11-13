@@ -12,7 +12,11 @@ router.get("/", async (_req, res, next) => {
       select: {
         id: true,
         name: true,
-        _count: { select: { products: true } },
+        _count: {
+          select: {
+            products: { where: { is_active: true, deletedAt: null } },
+          },
+        },
       },
     });
 

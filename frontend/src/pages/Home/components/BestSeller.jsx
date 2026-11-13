@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ShoppingCart, Heart, Star, Shield, Lock, Truck, Package } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
+import { fetchHomeBundle } from '../../../lib/homeData';
+import { mapApiProductCard } from '../../../lib/storefrontProducts';
+import { productPath } from '../../../lib/productSlug';
 
 export const BestSeller = () => {
   const { addToCart } = useCart();
@@ -10,28 +13,14 @@ export const BestSeller = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/products?limit=6&sort=createdAt&order=desc')
-      .then((res) => res.json())
+    fetchHomeBundle()
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          const formatted = data.data.map((p) => ({
-            id: p.id,
-            name: p.name,
-            slug: p.id,
-            brand: p.brand || 'ToyCulture',
-            price: p.price,
-            originalPrice: p.originalPrice || null,
-            discount: p.discount || null,
-            rating: p.rating || 4.8,
-            reviewsCount: p.reviews || 0,
-            image: p.image,
-            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
-            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
-          }));
-          setProducts(formatted);
-        }
+        setProducts((data.topSelling || []).slice(0, 6).map(mapApiProductCard).filter(Boolean));
       })
-      .catch((err) => console.error('Error fetching best sellers:', err))
+      .catch((err) => {
+        console.error('Error fetching best sellers:', err);
+        setProducts([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -113,7 +102,7 @@ export const BestSeller = () => {
 
                     {/* Product Image */}
                     <Link
-                      to={`/product/${product.id}`}
+                      to={productPath(product)}
                       className="w-full aspect-[4/3] rounded-xl overflow-hidden mb-3 flex items-center justify-center bg-[#FAF9F5] p-2 cursor-pointer"
                     >
                       <img
@@ -134,7 +123,7 @@ export const BestSeller = () => {
                         </span>
 
                         <Link
-                          to={`/product/${product.id}`}
+                          to={productPath(product)}
                           className="text-[13px] lg:text-[14px] font-bold text-[#0F243E] hover:text-[#F96515] transition-colors line-clamp-2 leading-snug mt-0.5 font-sans cursor-pointer"
                         >
                           {product.name}
@@ -214,7 +203,7 @@ export const BestSeller = () => {
 
                     {/* Product Image */}
                     <Link
-                      to={`/product/${product.id}`}
+                      to={productPath(product)}
                       className="w-full aspect-square rounded-xl bg-[#FAF9F5] p-1.5 mb-2 flex items-center justify-center overflow-hidden"
                     >
                       <img
@@ -234,7 +223,7 @@ export const BestSeller = () => {
                           {product.brand}
                         </span>
                         <Link
-                          to={`/product/${product.id}`}
+                          to={productPath(product)}
                           className="text-xs font-bold text-[#0F243E] line-clamp-2 leading-tight"
                         >
                           {product.name}

@@ -1,6 +1,12 @@
 import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
+import { scheduleOrderConfirmationEmail } from "../../utils/orderEmail.js";
+import { createRazorpayOrderForShopOrder } from "./orderPayment.service.js";
+import { validateCouponForUser } from "./couponValidate.service.js";
+import { getRazorpay } from "../../config/razorpay.js";
+import { calculateDeliveryFee } from "../../utils/shipping.js";
+import { getPincodeServiceability } from "../shipping/pincode.service.js";
 
 export const createOrderService = async (currentUserEmail, orderData) => {
     // 1. Resolve User
@@ -42,6 +48,21 @@ export const createOrderService = async (currentUserEmail, orderData) => {
         }
     }
 
+    const shippingAddress = await prisma.address.findUnique({
+        where: { id: addressId },
+    });
+    if (!shippingAddress || shippingAddress.user_id !== user.id) {
+        throw new ErrorWithStatus("Invalid shipping address", HTTP_RES.BAD_REQUEST);
+    }
+
+    const pinService = await getPincodeServiceability(shippingAddress.pincode);
+    if (!pinService.serviceable) {
+        throw new ErrorWithStatus(
+            pinService.message || "Delivery not available for this pincode",
+            HTTP_RES.BAD_REQUEST
+        );
+    }
+
     // 3. Process Order Items & Calculate Totals
     const itemDetails = [];
     let subtotal = 0;
@@ -69,6 +90,14 @@ export const createOrderService = async (currentUserEmail, orderData) => {
             throw new ErrorWithStatus(`Product ${pId} not available`, HTTP_RES.BAD_REQUEST);
         }
 
+        const stockLeft = Number(product.stockQTY ?? 0);
+        if (stockLeft < qty) {
+            throw new ErrorWithStatus(
+                `"${product.name}" has only ${Math.max(stockLeft, 0)} left in stock`,
+                HTTP_RES.BAD_REQUEST
+            );
+        }
+
         const effectivePrice = product.sellingPrice ?? product.price;
         const lineTotal = effectivePrice * qty;
         subtotal += lineTotal;
@@ -88,30 +117,19 @@ export const createOrderService = async (currentUserEmail, orderData) => {
         });
     }
 
-    // 4. Validate Coupon
     let couponRecord = null;
     let discountAmount = 0;
     if (orderData.coupon_code) {
-        const coupon = await prisma.coupon.findUnique({
-            where: { code: orderData.coupon_code.trim().toUpperCase() },
+        const validated = await validateCouponForUser({
+            code: orderData.coupon_code,
+            subtotal,
+            userId: user.id,
         });
-
-        if (coupon && coupon.is_active && new Date(coupon.valid_until) > new Date()) {
-            if (subtotal >= coupon.min_order_amount) {
-                if (coupon.type === "PERCENTAGE") {
-                    discountAmount = (subtotal * coupon.value) / 100;
-                    if (coupon.max_discount) {
-                        discountAmount = Math.min(discountAmount, coupon.max_discount);
-                    }
-                } else {
-                    discountAmount = coupon.value;
-                }
-                couponRecord = coupon;
-            }
-        }
+        discountAmount = validated.discount;
+        couponRecord = validated.coupon;
     }
 
-    const deliveryFee = subtotal >= 1000 ? 0 : 50;
+    const deliveryFee = calculateDeliveryFee(subtotal, pinService.extra_delivery_fee);
     const finalTotal = Math.max(0, subtotal - discountAmount + deliveryFee);
 
     // Normalize payment method to enum (COD, RAZORPAY, WALLET)
@@ -119,6 +137,13 @@ export const createOrderService = async (currentUserEmail, orderData) => {
     if (orderData.payment_method === "WALLET") paymentMethodEnum = "WALLET";
     else if (["RAZORPAY", "UPI", "CARD", "ONLINE"].includes(orderData.payment_method?.toUpperCase())) {
         paymentMethodEnum = "RAZORPAY";
+    }
+
+    if (paymentMethodEnum === "COD" && pinService.cod_allowed === false) {
+        throw new ErrorWithStatus(
+            "Cash on delivery is not available for this pincode — please pay online",
+            HTTP_RES.BAD_REQUEST
+        );
     }
 
     // 5. Execute Order Placement in Atomic Transaction
@@ -166,6 +191,8 @@ export const createOrderService = async (currentUserEmail, orderData) => {
                 shipping_address_id: addressId,
                 coupon_id:           couponRecord?.id || null,
                 total_amount:        finalTotal,
+                subtotal,
+                discount_amount:     discountAmount,
                 delivery_fee:        deliveryFee,
                 payment_method:      paymentMethodEnum,
                 payment_status:      paymentMethodEnum === "WALLET" ? "PAID" : "PENDING",
@@ -210,5 +237,18 @@ export const createOrderService = async (currentUserEmail, orderData) => {
         return createdOrder;
     });
 
-    return newOrder;
+    let razorpayCheckout = null;
+    if (paymentMethodEnum === "RAZORPAY") {
+        if (!getRazorpay()) {
+            throw new ErrorWithStatus(
+                "Online payment is not configured. Choose Cash on Delivery or try later.",
+                HTTP_RES.INTERNAL_ERROR
+            );
+        }
+        razorpayCheckout = await createRazorpayOrderForShopOrder(newOrder, user);
+    } else {
+        scheduleOrderConfirmationEmail(newOrder, user);
+    }
+
+    return { order: newOrder, razorpayCheckout };
 };

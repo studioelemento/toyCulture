@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import PageSeo from '../../../components/Common/PageSeo';
+import { shopListSeo } from '../../../lib/seo';
+import { productPath } from '../../../lib/productSlug';
+import { useShopPageFilters } from '../../../hooks/useShopPageFilters';
+import { PRICE_BUCKETS } from '../../../lib/shopFilters';
 import {
   ChevronRight,
   ChevronDown,
@@ -20,59 +25,31 @@ const makePlaceholder = (text) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-// product state moved inside component
-// loading state moved inside component
-// error state moved inside component
-
-// effect moved inside component
-
-const categories = [
-  { name: 'All Toys', count: 428, checked: true },
-  { name: 'Diecast Toys', count: 312, checked: false },
-  { name: 'Construction Toys', count: 210, checked: false },
-  { name: 'Puzzles', count: 186, checked: false },
-  { name: 'Role Play', count: 298, checked: false },
-  { name: 'STEM & DIY', count: 243, checked: false },
-  { name: 'Arts & Crafts', count: 190, checked: false },
-];
-
-const ageGroups = [
-  { name: '0 - 2 Years', count: 312, checked: false },
-  { name: '3 - 5 Years', count: 642, checked: false },
-  { name: '6 - 8 Years', count: 728, checked: true },
-  { name: '9 - 12 Years', count: 489, checked: false },
-  { name: '13+ Years', count: 177, checked: false },
-];
-
-const brands = [
-  { name: 'Maisto', count: 428, checked: true },
-  { name: 'Bburago', count: 312, checked: false },
-  { name: 'LEGO', count: 210, checked: false },
-  { name: 'Funskool', count: 164, checked: false },
-  { name: 'Hasbro', count: 142, checked: false },
-];
-
 const ShopHome = () => {
-  // State and effect for fetching products
-  const [products, setProducts] = useState([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-  const [errorProducts, setErrorProducts] = useState(null);
+  const { pathname: shopPath, search: locationSearch } = useLocation();
+  const {
+    loadingProducts,
+    errorProducts,
+    visibleProducts,
+    filterCategories,
+    filterBrands,
+    filterAges,
+    filterPrices,
+    categoryFilter,
+    brandFilter,
+    priceFilter,
+    query,
+    activeAgeGroup,
+    toggleFilterParam,
+    clearFilterParam,
+    clearAllFilters,
+  } = useShopPageFilters();
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await fetch('/api/v1/products');
-        if (!res.ok) throw new Error('Failed to fetch products');
-        const data = await res.json();
-        setProducts(data.success ? data.data : []);
-      } catch (err) {
-        setErrorProducts(err.message);
-      } finally {
-        setLoadingProducts(false);
-      }
-    };
-    fetchProducts();
-  }, []);
+  const activePriceLabel = PRICE_BUCKETS.find((b) => b.id === priceFilter)?.label;
+  const pageTitle = query
+    ? `Search: ${query}`
+    : categoryFilter || brandFilter || activeAgeGroup?.range || 'All Toys';
+  const hasActiveFilters = Boolean(categoryFilter || brandFilter || priceFilter || activeAgeGroup || query);
   const [isCategoryOpen, setIsCategoryOpen] = useState(true);
   const [isAgeOpen, setIsAgeOpen] = useState(true);
   const [isPriceOpen, setIsPriceOpen] = useState(true);
@@ -80,8 +57,33 @@ const ShopHome = () => {
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [isMobileSortOpen, setIsMobileSortOpen] = useState(false);
 
+  const listSeo = useMemo(
+    () =>
+      shopListSeo({
+        category: categoryFilter,
+        brand: brandFilter,
+        ageRange: activeAgeGroup?.range,
+        query,
+        productCount: loadingProducts ? undefined : visibleProducts.length,
+      }),
+    [
+      categoryFilter,
+      brandFilter,
+      activeAgeGroup?.range,
+      query,
+      loadingProducts,
+      visibleProducts.length,
+    ]
+  );
+
   return (
     <div className="w-full bg-[#f8fafc] min-h-screen pb-12 font-sans">
+      <PageSeo
+        title={listSeo.title}
+        description={listSeo.description}
+        pathname={shopPath}
+        search={locationSearch}
+      />
       {/* Breadcrumb */}
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 pt-4 pb-2">
         <div className="flex items-center text-[13px] text-gray-500 gap-1.5">
@@ -95,9 +97,13 @@ const ShopHome = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4 md:mb-6">
           <div>
-            <h1 className="text-[32px] md:text-[40px] font-black text-[#0F243E] leading-tight">All Toys</h1>
+            <h1 className="text-[32px] md:text-[40px] font-black text-[#0F243E] leading-tight">
+              {pageTitle}
+            </h1>
             <p className="text-gray-500 text-[15px] mt-1">
-              {loadingProducts ? "Loading toys..." : `${products.length} product${products.length === 1 ? "" : "s"}`}
+              {loadingProducts
+                ? 'Loading toys...'
+                : `${visibleProducts.length} product${visibleProducts.length === 1 ? '' : 's'}`}
             </p>
           </div>
 
@@ -149,7 +155,7 @@ const ShopHome = () => {
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
               <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-4">
                 <h2 className="text-[18px] font-bold text-[#0F243E]">Filters</h2>
-                <button className="text-[#F96515] text-[13px] font-bold hover:underline">Clear All</button>
+                <button type="button" onClick={clearAllFilters} className="text-[#F96515] text-[13px] font-bold hover:underline">Clear All</button>
               </div>
 
               {/* Categories */}
@@ -167,20 +173,22 @@ const ShopHome = () => {
                 </button>
                 {isCategoryOpen && (
                   <div className="space-y-2">
-                    {categories.map((cat, idx) => (
-                      <label key={idx} className={`flex items-center justify-between cursor-pointer group ${cat.checked ? 'bg-[#FFF1EB] -mx-2 px-2 py-1 rounded-md' : 'py-1'}`}>
+                    {filterCategories.length === 0 ? (
+                      <p className="text-[13px] text-gray-400">No categories with products yet.</p>
+                    ) : filterCategories.map((cat) => (
+                      <label key={cat.id} className={`flex items-center justify-between cursor-pointer group ${categoryFilter === cat.title ? 'bg-[#FFF1EB] -mx-2 px-2 py-1 rounded-md' : 'py-1'}`}>
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            defaultChecked={cat.checked}
+                            checked={categoryFilter === cat.title}
+                            onChange={() => toggleFilterParam('category', cat.title)}
                             className="w-4 h-4 rounded border-gray-300 text-[#F96515] focus:ring-[#F96515] focus:ring-offset-0 cursor-pointer"
                           />
-                          <span className={`text-[14px] ${cat.checked ? 'text-[#F96515] font-semibold' : 'text-gray-600 group-hover:text-gray-800'}`}>{cat.name}</span>
+                          <span className={`text-[14px] ${categoryFilter === cat.title ? 'text-[#F96515] font-semibold' : 'text-gray-600 group-hover:text-gray-800'}`}>{cat.title}</span>
                         </div>
-                        <span className="text-[13px] text-gray-400">({cat.count})</span>
+                        <span className="text-[13px] text-gray-400">({cat.productCount})</span>
                       </label>
                     ))}
-                    <button className="text-[13px] text-gray-500 font-medium hover:text-[#F96515] mt-1">Show more</button>
                   </div>
                 )}
               </div>
@@ -200,12 +208,15 @@ const ShopHome = () => {
                 </button>
                 {isAgeOpen && (
                   <div className="space-y-2">
-                    {ageGroups.map((age, idx) => (
-                      <label key={idx} className="flex items-center justify-between cursor-pointer group py-1">
+                    {filterAges.length === 0 ? (
+                      <p className="text-[13px] text-gray-400">No age data yet.</p>
+                    ) : filterAges.map((age) => (
+                      <label key={age.id} className="flex items-center justify-between cursor-pointer group py-1">
                         <div className="flex items-center gap-3">
                           <input
                             type="checkbox"
-                            defaultChecked={age.checked}
+                            checked={activeAgeGroup?.id === age.id}
+                            onChange={() => toggleFilterParam('age', age.id)}
                             className="w-4 h-4 rounded border-gray-300 text-[#F96515] focus:ring-[#F96515] focus:ring-offset-0 cursor-pointer"
                           />
                           <span className="text-[14px] text-gray-600 group-hover:text-gray-800">{age.name}</span>
@@ -231,38 +242,23 @@ const ShopHome = () => {
                   )}
                 </button>
                 {isPriceOpen && (
-                  <div className="space-y-4">
-                    {/* Fake Slider Range */}
-                    <div className="px-1 mt-2">
-                      <div className="relative w-full h-1 bg-gray-200 rounded-full">
-                        <div className="absolute left-0 right-[40%] top-0 bottom-0 bg-[#F96515] rounded-full"></div>
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-[#F96515] border-2 border-white rounded-full shadow cursor-pointer"></div>
-                        <div className="absolute right-[40%] top-1/2 -translate-y-1/2 w-4 h-4 bg-[#F96515] border-2 border-white rounded-full shadow cursor-pointer"></div>
-                      </div>
-                      <div className="text-[13px] text-gray-500 font-medium mt-3">₹0 - ₹5,000+</div>
-                    </div>
-
-                    <div className="space-y-2">
-                      {[
-                        { name: 'Under ₹500', count: 620, checked: false },
-                        { name: '₹500 - ₹1,000', count: 842, checked: false },
-                        { name: '₹1,000 - ₹2,000', count: 564, checked: true },
-                        { name: '₹2,000 - ₹5,000', count: 298, checked: false },
-                        { name: '₹5,000+', count: 24, checked: false }
-                      ].map((price, idx) => (
-                        <label key={idx} className="flex items-center justify-between cursor-pointer group py-1">
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              defaultChecked={price.checked}
-                              className="w-4 h-4 rounded border-gray-300 text-[#F96515] focus:ring-[#F96515] focus:ring-offset-0 cursor-pointer"
-                            />
-                            <span className="text-[14px] text-gray-600 group-hover:text-gray-800">{price.name}</span>
-                          </div>
-                          <span className="text-[13px] text-gray-400">({price.count})</span>
-                        </label>
-                      ))}
-                    </div>
+                  <div className="space-y-2">
+                    {filterPrices.length === 0 ? (
+                      <p className="text-[13px] text-gray-400">No price bands available.</p>
+                    ) : filterPrices.map((price) => (
+                      <label key={price.id} className="flex items-center justify-between cursor-pointer group py-1">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={priceFilter === price.id}
+                            onChange={() => toggleFilterParam('price', price.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-[#F96515] focus:ring-[#F96515] focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span className="text-[14px] text-gray-600 group-hover:text-gray-800">{price.label}</span>
+                        </div>
+                        <span className="text-[13px] text-gray-400">({price.count})</span>
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>
@@ -291,12 +287,15 @@ const ShopHome = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      {brands.map((brand, idx) => (
-                        <label key={idx} className="flex items-center justify-between cursor-pointer group py-1">
+                      {filterBrands.length === 0 ? (
+                        <p className="text-[13px] text-gray-400">No brands with products yet.</p>
+                      ) : filterBrands.map((brand) => (
+                        <label key={brand.id} className="flex items-center justify-between cursor-pointer group py-1">
                           <div className="flex items-center gap-3">
                             <input
                               type="checkbox"
-                              defaultChecked={brand.checked}
+                              checked={brandFilter === brand.name}
+                              onChange={() => toggleFilterParam('brand', brand.name)}
                               className="w-4 h-4 rounded border-gray-300 text-[#F96515] focus:ring-[#F96515] focus:ring-offset-0 cursor-pointer"
                             />
                             <span className="text-[14px] text-gray-600 group-hover:text-gray-800">{brand.name}</span>
@@ -304,7 +303,6 @@ const ShopHome = () => {
                           <span className="text-[13px] text-gray-400">({brand.count})</span>
                         </label>
                       ))}
-                      <button className="text-[13px] text-gray-500 font-medium hover:text-[#F96515] mt-1">Show more</button>
                     </div>
                   </div>
                 )}
@@ -317,51 +315,100 @@ const ShopHome = () => {
           <div className="flex-1">
 
             {/* Active Filters */}
+            {hasActiveFilters ? (
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[14px] font-medium text-gray-600 mr-1">Active Filters:</span>
-                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
-                  6 - 8 Years
-                  <button className="text-gray-400 hover:text-gray-700 ml-1">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
-                  Maisto
-                  <button className="text-gray-400 hover:text-gray-700 ml-1">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
-                  Under ₹2,000
-                  <button className="text-gray-400 hover:text-gray-700 ml-1">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <button className="text-[#F96515] text-[13px] font-bold hover:underline ml-2">Clear All</button>
+                {query ? (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
+                    Search: {query}
+                    <button type="button" onClick={() => clearFilterParam('q')} className="text-gray-400 hover:text-gray-700 ml-1" aria-label="Remove search filter">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                {categoryFilter ? (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
+                    {categoryFilter}
+                    <button type="button" onClick={() => clearFilterParam('category')} className="text-gray-400 hover:text-gray-700 ml-1" aria-label="Remove category filter">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                {brandFilter ? (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
+                    {brandFilter}
+                    <button type="button" onClick={() => clearFilterParam('brand')} className="text-gray-400 hover:text-gray-700 ml-1" aria-label="Remove brand filter">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                {activePriceLabel ? (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
+                    {activePriceLabel}
+                    <button type="button" onClick={() => clearFilterParam('price')} className="text-gray-400 hover:text-gray-700 ml-1" aria-label="Remove price filter">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                {activeAgeGroup ? (
+                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-[13px] font-medium text-gray-700">
+                    {activeAgeGroup.range}
+                    <button type="button" onClick={() => clearFilterParam('age')} className="text-gray-400 hover:text-gray-700 ml-1" aria-label="Remove age filter">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="text-[#F96515] text-[13px] font-bold hover:underline ml-2"
+                >
+                  Clear All
+                </button>
               </div>
               <div className="text-[14px] text-gray-500">
-                {products.length > 0 ? `Showing ${products.length} product${products.length === 1 ? "" : "s"}` : ""}
+                {visibleProducts.length > 0
+                  ? `Showing ${visibleProducts.length} product${visibleProducts.length === 1 ? '' : 's'}`
+                  : ''}
               </div>
             </div>
+            ) : null}
 
             {loadingProducts ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#F96515] border-t-transparent mb-3"></div>
                 <p className="text-gray-600 font-medium">Loading products from database...</p>
               </div>
-            ) : products.length === 0 ? (
+            ) : visibleProducts.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-gray-100 shadow-sm">
                 <div className="text-4xl mb-3">🧸</div>
                 <h3 className="text-lg font-bold text-[#0F243E] mb-1">No products found</h3>
                 <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                  Add products through the Admin Dashboard to see them displayed here.
+                  {query
+                    ? `No toys found for "${query}". Try another search term.`
+                    : categoryFilter
+                      ? `No toys found in ${categoryFilter}. Try another category or browse all toys.`
+                      : brandFilter
+                        ? `No toys found for brand ${brandFilter}.`
+                        : activeAgeGroup
+                          ? `No toys are listed for ${activeAgeGroup.range} yet. Try another age group or browse all toys.`
+                          : 'Add products through the Admin Dashboard to see them displayed here.'}
                 </p>
+                {categoryFilter ? (
+                  <Link to="/shop-by-category" className="inline-block mt-4 text-[#F96515] font-bold text-sm hover:underline">
+                    Browse all categories
+                  </Link>
+                ) : activeAgeGroup ? (
+                  <Link to="/shop-by-age" className="inline-block mt-4 text-[#F96515] font-bold text-sm hover:underline">
+                    Browse all age groups
+                  </Link>
+                ) : null}
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
-                {products.map((product) => (
-                  <Link to={`/product/${product.id}`} key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full block">
+                {visibleProducts.map((product) => (
+                  <Link to={productPath(product)} key={product.id} className="bg-white rounded-xl md:rounded-2xl p-3 md:p-4 shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all group flex flex-col h-full block">
 
                   {/* Image & Badges */}
                   <div className="relative aspect-square mb-3 md:mb-4 bg-gray-50 rounded-xl overflow-hidden flex items-center justify-center p-3 md:p-4">
@@ -440,34 +487,11 @@ const ShopHome = () => {
             </div>
           )}
 
-            {/* Pagination */}
-            <div className="flex flex-wrap items-center justify-center gap-1.5 md:gap-2 mt-8 md:mt-10">
-              <button className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors">
-                <ChevronRight className="w-4 h-4 md:w-5 md:h-5 rotate-180" />
-              </button>
-              <button className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-[#F96515] text-white text-[14px] md:text-base font-bold shadow-sm">
-                1
-              </button>
-              <button className="w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 text-[14px] md:text-base font-medium hover:bg-gray-50 transition-colors">
-                2
-              </button>
-              <button className="hidden sm:flex w-8 h-8 md:w-10 md:h-10 items-center justify-center rounded-lg border border-gray-200 text-gray-600 text-[14px] md:text-base font-medium hover:bg-gray-50 transition-colors">
-                3
-              </button>
-              <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors">
-                4
-              </button>
-              <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors">
-                5
-              </button>
-              <span className="w-10 h-10 flex items-center justify-center text-gray-400">...</span>
-              <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors">
-                147
-              </button>
-              <button className="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
+            {visibleProducts.length > 0 && (
+              <p className="text-center text-sm text-gray-500 mt-8 md:mt-10">
+                Showing all {visibleProducts.length} matching product{visibleProducts.length === 1 ? '' : 's'} from the catalog.
+              </p>
+            )}
 
           </div>
         </div>
@@ -493,7 +517,7 @@ const ShopHome = () => {
             <div className="flex items-start justify-between px-5 pb-4 border-b border-gray-100">
               <div>
                 <h2 className="text-[22px] font-black text-[#0F243E] leading-none mb-1">Filter</h2>
-                <p className="text-[13px] text-gray-500 font-medium">2,348 products</p>
+                <p className="text-[13px] text-gray-500 font-medium">{visibleProducts.length} products</p>
               </div>
               <button
                 onClick={() => setIsMobileFilterOpen(false)}
@@ -512,22 +536,23 @@ const ShopHome = () => {
                   <ChevronDown className="w-5 h-5 text-[#0F243E]" />
                 </div>
                 <div className="space-y-3">
-                  {categories.map((cat, idx) => (
-                    <label key={idx} className="flex items-center justify-between cursor-pointer group">
+                  {filterCategories.map((cat) => (
+                    <label key={cat.id} className="flex items-center justify-between cursor-pointer group">
                       <div className="flex items-center gap-3">
                         <div className="relative flex items-center justify-center">
                           <input
                             type="checkbox"
-                            defaultChecked={cat.checked}
+                            checked={categoryFilter === cat.title}
+                            onChange={() => toggleFilterParam('category', cat.title)}
                             className="w-5 h-5 rounded-[4px] border-gray-300 text-[#F96515] focus:ring-0 cursor-pointer peer appearance-none checked:bg-[#F96515] checked:border-[#F96515] bg-white border-[1.5px]"
                           />
                           <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="20 6 9 17 4 12"></polyline>
                           </svg>
                         </div>
-                        <span className="text-[15px] text-[#0F243E] font-medium">{cat.name}</span>
+                        <span className="text-[15px] text-[#0F243E] font-medium">{cat.title}</span>
                       </div>
-                      <span className="text-[14px] text-gray-400">({cat.count})</span>
+                      <span className="text-[14px] text-gray-400">({cat.productCount})</span>
                     </label>
                   ))}
                 </div>
@@ -540,13 +565,14 @@ const ShopHome = () => {
                   <ChevronDown className="w-5 h-5 text-[#0F243E]" />
                 </div>
                 <div className="space-y-3">
-                  {ageGroups.map((age, idx) => (
-                    <label key={idx} className="flex items-center justify-between cursor-pointer group">
+                  {filterAges.map((age) => (
+                    <label key={age.id} className="flex items-center justify-between cursor-pointer group">
                       <div className="flex items-center gap-3">
                         <div className="relative flex items-center justify-center">
                           <input
                             type="checkbox"
-                            defaultChecked={age.checked}
+                            checked={activeAgeGroup?.id === age.id}
+                            onChange={() => toggleFilterParam('age', age.id)}
                             className="w-5 h-5 rounded-[4px] border-gray-300 text-[#F96515] focus:ring-0 cursor-pointer peer appearance-none checked:bg-[#F96515] checked:border-[#F96515] bg-white border-[1.5px]"
                           />
                           <svg className="absolute w-3.5 h-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -568,25 +594,20 @@ const ShopHome = () => {
                   <ChevronDown className="w-5 h-5 text-[#0F243E]" />
                 </div>
                 <div className="space-y-3">
-                  {[
-                    { name: 'Under ₹500', count: 620, checked: false },
-                    { name: '₹500 - ₹1,000', count: 842, checked: false },
-                    { name: '₹1,000 - ₹2,000', count: 564, checked: true },
-                    { name: '₹2,000 - ₹5,000', count: 298, checked: false },
-                    { name: '₹5,000+', count: 24, checked: false }
-                  ].map((price, idx) => (
-                    <label key={idx} className="flex items-center justify-between cursor-pointer group">
+                  {filterPrices.map((price) => (
+                    <label key={price.id} className="flex items-center justify-between cursor-pointer group">
                       <div className="flex items-center gap-3">
                         <div className="relative flex items-center justify-center">
                           <input
                             type="radio"
                             name="mobile_price"
-                            defaultChecked={price.checked}
+                            checked={priceFilter === price.id}
+                            onChange={() => toggleFilterParam('price', price.id)}
                             className="w-5 h-5 rounded-full border-gray-300 text-[#F96515] focus:ring-0 cursor-pointer peer appearance-none checked:border-[#F96515] checked:border-2 bg-white border-[1.5px]"
                           />
                           <div className="absolute w-2.5 h-2.5 bg-[#F96515] rounded-full opacity-0 peer-checked:opacity-100 pointer-events-none"></div>
                         </div>
-                        <span className="text-[15px] text-[#0F243E] font-medium">{price.name}</span>
+                        <span className="text-[15px] text-[#0F243E] font-medium">{price.label}</span>
                       </div>
                       <span className="text-[14px] text-gray-400">({price.count})</span>
                     </label>
@@ -608,7 +629,7 @@ const ShopHome = () => {
                 className="flex-[1.5] bg-[#F96515] rounded-xl py-2 flex flex-col items-center justify-center text-white active:scale-[0.98] transition-all shadow-[0_4px_14px_rgba(249,101,21,0.25)]"
               >
                 <span className="font-bold text-[15px] leading-tight">Apply Filters</span>
-                <span className="text-[11px] font-medium text-white/90 leading-tight">(2,348 products)</span>
+                <span className="text-[11px] font-medium text-white/90 leading-tight">({visibleProducts.length} products)</span>
               </button>
             </div>
           </div>

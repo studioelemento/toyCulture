@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { productPath } from '../../lib/productSlug';
 import { 
   ArrowLeft, 
   Trash2, 
@@ -17,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { requireLoginForPurchase } from '../../lib/requireLoginAction';
+import { mapApiProductCard } from '../../lib/storefrontProducts';
 
 const CartPage = () => {
   const navigate = useNavigate();
@@ -38,41 +40,23 @@ const CartPage = () => {
     navigate('/checkout');
   };
 
-  const suggestedProducts = [
-    {
-      id: 4,
-      name: "Porsche 911 GT3",
-      brand: "Maisto",
-      price: 2199,
-      originalPrice: 2799,
-      discount: "20% OFF",
-      image: "/ferrari.jpg"
-    },
-    {
-      id: 5,
-      name: "Fire Engine with Ladder",
-      brand: "Bruder",
-      price: 3499,
-      originalPrice: null,
-      image: "/lego.jpg"
-    },
-    {
-      id: 6,
-      name: "10 Car Pack",
-      brand: "Hot Wheels",
-      price: 1499,
-      originalPrice: null,
-      image: "/playdoh.jpg"
-    },
-    {
-      id: 7,
-      name: "John Deere Tractor",
-      brand: "Siku",
-      price: 2299,
-      originalPrice: null,
-      image: "/stacker.jpg"
-    }
-  ];
+  const [suggestedProducts, setSuggestedProducts] = useState([]);
+
+  useEffect(() => {
+    const cartIds = new Set(cart.map((item) => item.id || item.product?.id));
+    fetch('/api/v1/products?limit=12&sort=createdAt&order=desc')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success || !Array.isArray(data.data)) return;
+        const picks = data.data
+          .filter((p) => !cartIds.has(p.id))
+          .slice(0, 4)
+          .map(mapApiProductCard)
+          .filter(Boolean);
+        setSuggestedProducts(picks);
+      })
+      .catch(() => setSuggestedProducts([]));
+  }, [cart]);
 
   return (
     <div className="bg-gray-50 min-h-screen py-8">
@@ -158,7 +142,7 @@ const CartPage = () => {
                               </button>
                             </div>
                             
-                            <Link to={`/product/${pId}`}>
+                            <Link to={productPath({ id: pId, name: pName })}>
                               <h3 className="text-[#0F243E] sm:text-gray-900 font-bold text-[14px] sm:text-[15px] leading-tight mb-2 sm:mb-2.5 pr-4 sm:pr-0 hover:text-blue-600 transition-colors">{pName}</h3>
                             </Link>
                             

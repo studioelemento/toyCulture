@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ArrowRight, Gift, ShieldCheck, CreditCard, Truck, RotateCcw } from 'lucide-react';
-
-// Hero image asset (placeholder)
-const heroChildImage = 'https://placehold.co/600x450/FEECC8/0F243E?text=Child+Playing';
+import { DEFAULT_PRODUCT_IMAGE } from '../../../lib/storefrontProducts';
 
 export const Hero = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [heroImage, setHeroImage] = useState(DEFAULT_PRODUCT_IMAGE);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/v1/products?limit=1&sort=createdAt&order=desc')
+      .then((res) => res.json())
+      .then((data) => {
+        const image = data?.data?.[0]?.image;
+        if (alive && image) setHeroImage(image);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      navigate(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
     } else {
       navigate('/shop');
     }
@@ -106,8 +117,8 @@ export const Hero = () => {
               
               {/* Child & Toy Setup Image */}
               <img
-                src={heroChildImage}
-                alt="Child playing with wooden toys"
+                src={heroImage}
+                alt="Featured toy from our catalog"
                 className="w-full h-full object-cover object-center transform scale-100 select-none pointer-events-none"
               />
 

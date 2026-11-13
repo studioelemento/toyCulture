@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingBag, User, Menu, X, ChevronDown, LogOut } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { buildCategoryCards } from '../../lib/categories';
 
 export const MainHeader = ({ onOpenMobileMenu }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,7 +19,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
-          setCategories(data.data);
+          setCategories(buildCategoryCards(data.data, { requireProducts: true }));
         }
       })
       .catch((err) => console.error('Failed to load categories:', err));
@@ -27,7 +28,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      let url = `/search?q=${encodeURIComponent(searchTerm.trim())}`;
+      let url = `/shop?q=${encodeURIComponent(searchTerm.trim())}`;
       if (selectedCategory !== '0') {
         url += `&category=${encodeURIComponent(selectedCategory)}`;
       }
@@ -36,7 +37,10 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
     }
   };
 
-  const popularRequests = ['diecast toys', 'puzzles', 'building blocks', 'diy'];
+  const popularRequests = useMemo(
+    () => categories.slice(0, 4).map((cat) => cat.title),
+    [categories]
+  );
 
   return (
     <div className="bg-toyNavy text-white py-4 px-4 sticky top-0 z-40 shadow-md">
@@ -74,8 +78,8 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
               >
                 <option value="0">All Categories</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
+                  <option key={cat.id} value={cat.title}>
+                    {cat.title}
                   </option>
                 ))}
               </select>
@@ -116,7 +120,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
                     type="button"
                     onMouseDown={() => {
                       setSearchTerm(req);
-                      navigate(`/search?q=${encodeURIComponent(req)}`);
+                      navigate(`/shop?q=${encodeURIComponent(req)}`);
                     }}
                     className="text-xs bg-toyBg hover:bg-toyOrange hover:text-white px-3 py-1 rounded-full text-toyText-heading font-medium transition-colors"
                   >

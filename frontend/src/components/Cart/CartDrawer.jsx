@@ -4,6 +4,7 @@ import { X, Trash2, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { requireLoginForPurchase } from '../../lib/requireLoginAction';
+import { productPath as getProductPath } from '../../lib/productSlug';
 
 export const CartDrawer = () => {
   const {
@@ -111,13 +112,13 @@ export const CartDrawer = () => {
               const productName = product.name || 'Toy Product';
               const productPrice = Number(product.sellingPrice ?? product.price ?? 0);
               const productImage = (Array.isArray(product.images) && product.images[0]) || product.image || 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600';
-              const productPath = `/product/${product.id || product.slug}`;
+              const productHref = getProductPath(product);
 
               return (
                 <div key={productId} className="py-4 flex gap-4 items-center">
                   {/* Product Image */}
                   <Link
-                    to={productPath}
+                    to={productHref}
                     onClick={() => setIsCartOpen(false)}
                     className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"
                   >
@@ -135,7 +136,7 @@ export const CartDrawer = () => {
                   {/* Info & Quantity controls */}
                   <div className="flex-1">
                     <Link
-                      to={productPath}
+                      to={productHref}
                       onClick={() => setIsCartOpen(false)}
                       className="text-xs font-bold text-toyText-heading hover:text-toyOrange transition-colors line-clamp-2 leading-tight mb-1"
                     >

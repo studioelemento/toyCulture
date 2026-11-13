@@ -150,7 +150,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard label="Total Products"  value={totalProducts}  icon={Package}     color="indigo"  subLabel="Active in DB"         loading={loading} />
         <StatCard label="Total Inventory" value={totalStock.toLocaleString()} icon={TrendingUp} color="emerald" subLabel="Available units"     loading={loading} />
-        <StatCard label="Low Stock"       value={lowStockCount}  icon={AlertTriangle} color="amber" subLabel="Under 10 units"        loading={loading} />
+        <Link to="/products?lowStock=1" className="block">
+          <StatCard label="Low Stock"       value={lowStockCount}  icon={AlertTriangle} color="amber" subLabel="Under 10 units — tap to review"        loading={loading} />
+        </Link>
         <StatCard label="Total Orders"    value={totalOrders}    icon={ShoppingBag} color="purple"  subLabel="All time"              loading={loading} />
         <StatCard label="Total Users"     value={totalUsers}     icon={Users}       color="blue"    subLabel="Registered customers"  loading={loading} />
         <StatCard label="Revenue (₹)"     value={`₹${totalRevenue.toLocaleString()}`} icon={DollarSign} color="rose" subLabel="Paid orders only" loading={loading} />

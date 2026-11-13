@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { HTTP_RES, STATUS_TRANSITIONS } from "../../utils/CONSTANTS.js";
+import { scheduleOrderShippedEmail } from "../../utils/orderEmail.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET ALL ORDERS  (admin — paginated, searchable, filterable by status)
@@ -198,12 +199,77 @@ export const updateOrderStatusService = async (orderId, newStatus, description) 
         }
     }
 
-    return prisma.order.update({
+    const updated = await prisma.order.update({
         where: { id: orderId },
         data:  updateData,
         include: {
-            user:  { select: { id: true, first_name: true, last_name: true, email: true } },
+            user:  { select: { id: true, first_name: true, last_name: true, email: true, phone: true } },
+            items: true,
+            shipping_address: true,
+        },
+    });
+
+    if (newStatus === "SHIPPED" && currentStatus !== "SHIPPED") {
+        scheduleOrderShippedEmail(updated, updated.user);
+    }
+
+    return updated;
+};
+
+export const updateOrderShipmentService = async (
+    orderId,
+    { tracking_number, carrier, mark_shipped = true }
+) => {
+    const order = await prisma.order.findUnique({
+        where: { id: orderId, deletedAt: null },
+        include: {
+            user: { select: { id: true, first_name: true, last_name: true, email: true } },
             items: true,
         },
     });
+    if (!order) throw new ErrorWithStatus("Order not found", HTTP_RES.NOT_FOUND);
+
+    const tracking = tracking_number?.trim();
+    const carrierName = carrier?.trim();
+
+    if (!tracking) {
+        throw new ErrorWithStatus("Tracking number is required", HTTP_RES.BAD_REQUEST);
+    }
+
+    const existingHistory = Array.isArray(order.status_history) ? order.status_history : [];
+    const updateData = {
+        tracking_number: tracking,
+        carrier: carrierName || order.carrier || "Standard Courier",
+    };
+
+    const shouldShip = mark_shipped !== false;
+    const wasShipped = order.status === "SHIPPED";
+
+    if (shouldShip && order.status !== "SHIPPED" && order.status !== "DELIVERED") {
+        updateData.status = "SHIPPED";
+        updateData.status_history = [
+            ...existingHistory,
+            {
+                status: "SHIPPED",
+                description: `Tracking ${tracking}${carrierName ? ` via ${carrierName}` : ""}`,
+                timestamp: new Date().toISOString(),
+            },
+        ];
+    }
+
+    const updated = await prisma.order.update({
+        where: { id: orderId },
+        data: updateData,
+        include: {
+            user: { select: { id: true, first_name: true, last_name: true, email: true } },
+            items: true,
+            shipping_address: true,
+        },
+    });
+
+    if (shouldShip && !wasShipped && updated.status === "SHIPPED") {
+        scheduleOrderShippedEmail(updated, updated.user);
+    }
+
+    return updated;
 };

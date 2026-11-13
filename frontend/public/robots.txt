@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /account
+Disallow: /my-account
+Disallow: /orders
+Disallow: /my-orders
+Disallow: /addresses
+Disallow: /wishlist
+Disallow: /personal-details
+Disallow: /help-support
+Disallow: /support
+Disallow: /coupons
+
+Sitemap: https://toyculture.in/sitemap.xml

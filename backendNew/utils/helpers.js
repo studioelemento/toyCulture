@@ -17,7 +17,7 @@ export const verifyPaymentService = async (
   razorpay_payment_id,
   razorpay_signature
 ) => {
-  const secret = razorpay.key_secret;
+  const secret = process.env.RAZORPAY_SECRET;
   const body = `${razorpay_order_id}|${razorpay_payment_id}`;
   const isValidSignature = validateWebhookSignature(body, razorpay_signature, secret);
 
