@@ -1,99 +1,129 @@
 import { cartValidator } from "../validators/cartValidator.js";
 import {
-    removeCartService,
-    updateCartService,
+  removeCartService,
+  updateCartService,
 } from "../services/cart.service.js";
-import { User } from "../models/user.model.js";
-import { Cart } from "../models/cart.model.js";
+import { prisma } from "../config/prisma.js";
 import cloudinary from "../utils/cloudinary.js";
 import { toFixedNum } from "../utils/toFixedNum.js";
-export const  updateCartController = async (req, res, next) => {
-    try {
-        const currentUser = req.email;
-        const { value, error } = cartValidator(req.body);
-        if (error) throw error;
+import ErrorWithStatus from "../config/ErrorWithStatus.js";
+import { HTTP_RES } from "../utils/CONSTANTS.js";
 
-        const result = await updateCartService(currentUser, value);
-        res.json({data: result, message : "Cart Updated Successfully", status : "success" });
-    } catch (error) {
-        next(error);
-    }
+function productImageUrl(images) {
+  const first = Array.isArray(images) ? images[0] : null;
+  const raw = typeof first === "string" ? first : first?.url || null;
+  if (!raw) return null;
+  try {
+    return cloudinary.url(raw, { secure: true });
+  } catch {
+    return raw;
+  }
+}
+
+export const updateCartController = async (req, res, next) => {
+  try {
+    const currentUser = req.email;
+    const { value, error } = cartValidator(req.body);
+    if (error) throw error;
+
+    const result = await updateCartService(currentUser, value);
+    res.json({ data: result, message: "Cart Updated Successfully", status: "success" });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const removeCartController = async (req, res, next) => {
-    try {
-        const currentUser = req.email;
-
-        const { id } = req.params;
-
-        const result = await removeCartService(currentUser, id);
-        res.json({ result });
-    } catch (error) {
-        next(error);
-    }
+  try {
+    const currentUser = req.email;
+    const { id } = req.params;
+    const result = await removeCartService(currentUser, id);
+    res.json({ result });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getAllCartController = async (req, res, next) => {
-    try {
-        const currentUser = req.email;
-        const user = await User.findOne({ email: currentUser });
+  try {
+    const currentUser = req.email;
+    const user = await prisma.user.findUnique({ where: { email: currentUser } });
+    if (!user) throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
 
-        const cartItems = await Cart.find({ user_id: user._id })
-            .populate({
-                path: "variant_id",
-                populate: {
-                    path: "product_id",
-                    populate: {
-                        path: "category_id",
-                        select: "is_active discount",
-                    },
-                    select: "is_active images name price discount",
-                },
-                select: "color size stock ",
-            })
-            .lean();
+    const cart = await prisma.cart.findUnique({
+      where: { user_id: user.id },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: { category: true },
+            },
+            variant: true,
+          },
+        },
+      },
+    });
 
-        const simplifiedCartItems = cartItems.map((x) => {
-            const variant = x.variant_id;
-            const product = variant.product_id;
-            const category = product.category_id;
+    const cartItems = cart?.items || [];
 
-            const isActive =  product.is_active && category.is_active;
+    const simplifiedCartItems = cartItems.map((item) => {
+      const product = item.product;
+      const category = product?.category;
+      const variant = item.variant;
+      const isActive =
+        Boolean(product?.is_active) &&
+        !product?.deletedAt &&
+        (!category || category.is_active);
 
-            return {
-                _id: x._id,
-                variant_id: variant._id,
-                product_id: product._id,
-                name : product.name,
-                color: variant.color,
-                price : product.price,
-                discount : product.discount < category.discount ? category.discount : product.discount,
-                size: variant.size,
-                stock: variant.stock,
+      const discount = Math.max(
+        Number(product?.discount || 0),
+        Number(category?.discount || 0)
+      );
 
-                is_active: isActive,
-                image: cloudinary.url(product.images?.[0]?.url || null, {
-                    secure: true,
-                }),
-                quantity: x.quantity,
-            };
-        });
+      return {
+        id: item.id,
+        _id: item.id,
+        variant_id: variant?.id || item.variant_id || null,
+        product_id: product.id,
+        name: product.name,
+        color: variant?.color || null,
+        price: product.price,
+        discount,
+        size: variant?.size || null,
+        stock: variant?.stock ?? product.stockQTY,
+        is_active: isActive,
+        image: productImageUrl(product.images),
+        quantity: item.quantity,
+      };
+    });
 
-        const subtotal = toFixedNum( simplifiedCartItems.reduce((acc,cur) => (cur.price * cur.quantity) + acc , 0 ))
+    const subtotal = toFixedNum(
+      simplifiedCartItems.reduce((acc, cur) => acc + cur.price * cur.quantity, 0)
+    );
+    const discountApplied = toFixedNum(
+      simplifiedCartItems.reduce(
+        (acc, cur) => acc + cur.price * (cur.discount / 100) * cur.quantity,
+        0
+      )
+    );
+    const discountAppliedInPercentage = subtotal
+      ? toFixedNum((discountApplied / subtotal) * 100)
+      : 0;
+    const total =
+      subtotal - discountApplied + (simplifiedCartItems.length === 0 ? 0 : 15);
 
-        const discountApplied = toFixedNum(simplifiedCartItems.reduce((acc, cur)=>{console.log(acc);return acc +( (cur.price * (cur.discount / 100)) * cur.quantity)}, 0))
-        const discountAppliedInPercentage = toFixedNum((discountApplied / subtotal) * 100 )
-        const total = subtotal - discountApplied +(simplifiedCartItems.length === 0 ? 0 : 15)
-        console.log(subtotal , discountApplied , total , simplifiedCartItems , 778)
-        // console.log(simplifiedCartItems)
-        return res
-            .status(200)
-            .json({
-                message: "Cart Items recieved Successfully",
-                data: {cart : simplifiedCartItems , subtotal , discountApplied , total, discountAppliedInPercentage},
-                status: "success",
-            });
-    } catch (error) {
-        next(error);
-    }
+    return res.status(200).json({
+      message: "Cart Items received Successfully",
+      data: {
+        cart: simplifiedCartItems,
+        subtotal,
+        discountApplied,
+        total,
+        discountAppliedInPercentage,
+      },
+      status: "success",
+    });
+  } catch (error) {
+    next(error);
+  }
 };

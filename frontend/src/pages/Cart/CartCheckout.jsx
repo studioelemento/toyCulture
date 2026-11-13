@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   UserCircle, 
@@ -15,88 +15,114 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { requireLoginForPurchase } from '../../lib/requireLoginAction';
+import { accountIdentity, extractList, formatAddress } from '../../lib/accountHelpers';
 
 const CartCheckout = () => {
   const navigate = useNavigate();
-  const { cart, subtotal, shippingFee, grandTotal, clearCart } = useCart();
-  const [selectedAddress, setSelectedAddress] = useState(1);
+  const { cart, subtotal, shippingFee, grandTotal, clearCart, showToast } = useCart();
+  const { currentUser, isLoggedIn, isBootstrapping, openAuthDrawer } = useAuth();
+  const { displayName, displayEmail } = accountIdentity(currentUser);
+  const [addresses, setAddresses] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState('upi');
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderId, setOrderId] = useState('');
+  const [placeError, setPlaceError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const json = await api.get('/api/account/address');
+        const mapped = extractList(json).map((addr) => {
+          const formatted = formatAddress(addr);
+          if (!formatted) return null;
+          return {
+            id: formatted.id,
+            type: formatted.type,
+            isDefault: formatted.isDefault,
+            name: formatted.name,
+            addressLine1: formatted.line1,
+            addressLine2: formatted.line2,
+            city: [formatted.city, formatted.state].filter(Boolean).join(', '),
+            pin: formatted.pincode,
+            phone: formatted.phone,
+          };
+        }).filter(Boolean);
+        if (!alive) return;
+        setAddresses(mapped);
+        const primary = mapped.find((a) => a.isDefault) || mapped[0];
+        setSelectedAddress(primary?.id || null);
+      } catch {
+        if (alive) setAddresses([]);
+      }
+    };
+    if (isLoggedIn) load();
+    return () => { alive = false; };
+  }, [isLoggedIn, currentUser]);
+
+  useEffect(() => {
+    if (isBootstrapping) return;
+    if (!isLoggedIn) {
+      const message = 'Please log in to complete your purchase.';
+      showToast?.(message);
+      openAuthDrawer('login', message);
+      navigate('/cart', { replace: true });
+    }
+  }, [isBootstrapping, isLoggedIn, navigate, openAuthDrawer, showToast]);
 
   const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
+    if (
+      !requireLoginForPurchase({
+        isLoggedIn,
+        isBootstrapping,
+        openAuthDrawer,
+        showToast,
+      })
+    ) {
+      return;
+    }
 
     try {
       const activeAddress = addresses.find((a) => a.id === selectedAddress) || addresses[0];
+      if (!activeAddress) {
+        setPlaceError('Please add a delivery address before placing the order.');
+        return;
+      }
+      setPlaceError('');
       const payload = {
         payment_method: selectedPayment === 'cod' ? 'COD' : (selectedPayment === 'wallet' ? 'WALLET' : 'RAZORPAY'),
         order_items: cart.map((item) => ({
           product_id: item.product?.id || item.id,
           quantity: item.quantity || 1,
         })),
+        shipping_address_id: activeAddress.id,
         shipping_address: {
-          name: activeAddress?.name || 'Customer',
-          phone: '+91 9876543210',
-          addressLine1: activeAddress?.addressLine1 || 'Main Street',
-          city: activeAddress?.city || 'City',
-          pin: activeAddress?.pin || '695001',
-          type: activeAddress?.type || 'Home',
+          name: activeAddress.name || displayName,
+          phone: activeAddress.phone || currentUser?.phone || '',
+          addressLine1: activeAddress.addressLine1,
+          city: activeAddress.city,
+          pin: activeAddress.pin,
+          type: activeAddress.type || 'Home',
         },
       };
 
-      const res = await fetch('/api/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.data?.order_number) {
-        setOrderId(data.data.order_number);
+      const data = await api.post('/api/order', payload);
+      if (data.data?.order_number || data.data?.id) {
+        setOrderId(data.data.order_number || data.data.id);
+        setOrderPlaced(true);
+        clearCart();
       } else {
-        setOrderId('TC-' + Math.floor(100000 + Math.random() * 900000));
+        setPlaceError(data.message || 'Could not place order.');
       }
-    } catch {
-      setOrderId('TC-' + Math.floor(100000 + Math.random() * 900000));
+    } catch (err) {
+      setPlaceError(err.message || 'Could not place order.');
     }
-
-    setOrderPlaced(true);
-    clearCart();
   };
-
-  const addresses = [
-    {
-      id: 1,
-      type: 'Home',
-      isDefault: true,
-      name: 'Anand R V',
-      addressLine1: 'TC 12/345, Main Road',
-      addressLine2: 'Kumarapuram',
-      city: 'Thiruvananthapuram, Kerala',
-      pin: '695001'
-    },
-    {
-      id: 2,
-      type: 'Office',
-      isDefault: false,
-      name: 'Anand R V',
-      addressLine1: '2nd Floor, Tech Park, Infopark',
-      addressLine2: 'Kakkanad',
-      city: 'Kochi, Kerala',
-      pin: '682042'
-    },
-    {
-      id: 3,
-      type: 'Other',
-      isDefault: false,
-      name: 'Anand R V',
-      addressLine1: 'Plantation House',
-      addressLine2: 'Kollam, Kerala',
-      city: 'Kollam, Kerala',
-      pin: '691001'
-    }
-  ];
 
   if (orderPlaced) {
     return (
@@ -173,15 +199,15 @@ const CartCheckout = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-6 pt-1 sm:pt-2">
                 <div className="flex sm:block items-center">
                   <div className="text-[14px] sm:text-xs text-gray-500 sm:text-gray-400 font-medium sm:mb-1 w-[80px] sm:w-auto">Name</div>
-                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">Anand R V</div>
+                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">{displayName}</div>
                 </div>
                 <div className="flex sm:block items-center">
                   <div className="text-[14px] sm:text-xs text-gray-500 sm:text-gray-400 font-medium sm:mb-1 w-[80px] sm:w-auto">Mobile</div>
-                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">+91 98765 43210</div>
+                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">{currentUser?.phone || '—'}</div>
                 </div>
                 <div className="flex sm:block items-center">
                   <div className="text-[14px] sm:text-xs text-gray-500 sm:text-gray-400 font-medium sm:mb-1 w-[80px] sm:w-auto">Email</div>
-                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">anandrv@example.com</div>
+                  <div className="font-semibold text-gray-800 sm:text-gray-900 text-[15px] sm:text-base">{displayEmail || '—'}</div>
                 </div>
               </div>
             </div>
@@ -195,7 +221,11 @@ const CartCheckout = () => {
                   </div>
                   <h2 className="text-lg font-bold text-[#0F243E]">Delivery Address</h2>
                 </div>
-                <button className="hidden sm:flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => navigate('/account/addresses')}
+                  className="hidden sm:flex items-center gap-1 text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                >
                   <Plus className="w-4 h-4" />
                   Add New Address
                 </button>
@@ -207,6 +237,9 @@ const CartCheckout = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 sm:mb-6">
+                {addresses.length === 0 && (
+                  <p className="col-span-full text-sm text-gray-500">No saved addresses. Add one from My Addresses before placing an order.</p>
+                )}
                 {addresses.map(addr => (
                   <div 
                     key={addr.id} 
@@ -373,6 +406,7 @@ const CartCheckout = () => {
 
             {/* Place Order CTA (Desktop) */}
             <div className="hidden sm:block">
+              {placeError ? <p className="text-sm text-rose-600 font-medium mb-2">{placeError}</p> : null}
               <button 
                 onClick={handlePlaceOrder}
                 disabled={cart.length === 0}
@@ -510,6 +544,7 @@ const CartCheckout = () => {
 
             </div>
             
+            {placeError ? <p className="sm:hidden text-sm text-rose-600 font-medium mb-2">{placeError}</p> : null}
             {/* Place Order CTA (Mobile) */}
             <div className="sm:hidden mt-6">
               <button 

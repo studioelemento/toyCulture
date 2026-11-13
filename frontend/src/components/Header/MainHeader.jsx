@@ -1,24 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ShoppingBag, User, Menu, X, ChevronDown, LogOut } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
-import { categories } from '../../data/categories';
 
 export const MainHeader = ({ onOpenMobileMenu }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('0');
+  const [categories, setCategories] = useState([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { totalItemsCount, subtotal, toggleCart } = useCart();
   const { currentUser, isLoggedIn, openAuthDrawer, logout } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setCategories(data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to load categories:', err));
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
       let url = `/search?q=${encodeURIComponent(searchTerm.trim())}`;
       if (selectedCategory !== '0') {
-        url += `&category=${selectedCategory}`;
+        url += `&category=${encodeURIComponent(selectedCategory)}`;
       }
       navigate(url);
       setIsSearchFocused(false);
@@ -61,43 +72,43 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="bg-transparent pr-4 py-2 cursor-pointer focus:outline-none appearance-none"
               >
-                <option value="0">Select category</option>
+                <option value="0">All Categories</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.slug}>
+                  <option key={cat.id} value={cat.name}>
                     {cat.name}
                   </option>
                 ))}
               </select>
-              <ChevronDown size={14} className="absolute right-2 text-gray-500 pointer-events-none" />
+              <ChevronDown size={14} className="text-gray-500 pointer-events-none -ml-3" />
             </div>
 
-            {/* Input field */}
+            {/* Keyword Input */}
             <input
               type="text"
-              placeholder="Search for products"
+              placeholder="Search for toys, brands, categories..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
-              className="flex-1 px-4 py-2 text-sm text-toyText-primary focus:outline-none placeholder-gray-400"
+              className="w-full py-2.5 px-4 text-xs md:text-sm text-toyText-primary placeholder-gray-400 focus:outline-none"
             />
 
             {/* Search Submit Button */}
             <button
               type="submit"
-              className="bg-toyOrange hover:bg-toyOrange-hover text-white px-6 py-2 font-semibold text-sm transition-colors flex items-center justify-center gap-1"
+              className="bg-toyOrange hover:bg-toyOrange-hover text-white px-6 flex items-center justify-center transition-colors flex-shrink-0"
+              aria-label="Submit search"
             >
-              <Search size={16} />
-              <span>Search</span>
+              <Search size={18} />
             </button>
           </form>
 
-          {/* Popular Requests Search Dropdown */}
+          {/* Popular Searches Dropdown Suggestion */}
           {isSearchFocused && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 p-4 text-toyText-primary z-50 animate-fadeIn">
-              <div className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                Popular requests
-              </div>
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white text-toyText-primary shadow-2xl rounded-2xl p-4 border border-gray-100 z-50 animate-fadeIn">
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-2">
+                Popular Searches
+              </span>
               <div className="flex flex-wrap gap-2">
                 {popularRequests.map((req, idx) => (
                   <button
@@ -107,7 +118,7 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
                       setSearchTerm(req);
                       navigate(`/search?q=${encodeURIComponent(req)}`);
                     }}
-                    className="text-xs bg-gray-100 hover:bg-toyOrange hover:text-white px-3 py-1.5 rounded-full transition-colors font-medium"
+                    className="text-xs bg-toyBg hover:bg-toyOrange hover:text-white px-3 py-1 rounded-full text-toyText-heading font-medium transition-colors"
                   >
                     {req}
                   </button>
@@ -117,69 +128,89 @@ export const MainHeader = ({ onOpenMobileMenu }) => {
           )}
         </div>
 
-        {/* Right Tools (Account & Cart) */}
-        <div className="flex items-center gap-4 md:gap-6">
-          {/* User Account & Login Tools */}
-          <div className="flex items-center gap-3 md:gap-4">
-            {/* Dedicated Account Icon / Link */}
-            <Link
-              to="/account"
-              className="flex items-center gap-1.5 text-xs font-bold uppercase hover:text-toyOrange transition-colors group"
-              title="My Account"
-            >
-              <div className="w-8 h-8 rounded-full bg-white/10 hover:bg-toyOrange/20 border border-white/20 group-hover:border-toyOrange flex items-center justify-center transition-all">
-                <User size={18} className="text-white group-hover:text-toyOrange transition-colors" />
-              </div>
-              <span className="hidden xl:inline text-[11px] font-bold text-gray-200 group-hover:text-toyOrange">
-                Account
-              </span>
-            </Link>
-
-            {/* Login / Register or Profile pill */}
-            {isLoggedIn ? (
-              <div className="hidden sm:flex items-center gap-2 bg-white/10 py-1 px-2.5 rounded-full border border-white/10">
+        {/* Right Action Icons */}
+        <div className="flex items-center gap-4 sm:gap-6">
+          {/* User Account Button */}
+          {isLoggedIn ? (
+            <div className="relative group">
+              <Link
+                to="/account"
+                className="flex items-center gap-2 text-white hover:text-toyOrange transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-toyNavy-light border border-gray-700 flex items-center justify-center">
+                  <User size={18} className="text-toyOrange" />
+                </div>
+                <div className="hidden xl:flex flex-col text-left">
+                  <span className="text-[10px] text-gray-400 leading-tight">Welcome,</span>
+                  <span className="text-xs font-bold leading-tight truncate max-w-[100px]">
+                    {currentUser?.name || 'My Account'}
+                  </span>
+                </div>
+              </Link>
+              <div className="absolute right-0 top-full mt-2 w-48 bg-white text-toyText-primary rounded-xl shadow-xl border border-gray-100 py-2 hidden group-hover:block z-50">
                 <Link
                   to="/account"
-                  className="flex items-center gap-2 text-xs font-bold hover:text-toyOrange transition-colors"
+                  className="block px-4 py-2 text-xs font-medium hover:bg-toyBg hover:text-toyOrange"
                 >
-                  <div className="w-5 h-5 rounded-full bg-toyOrange text-white flex items-center justify-center font-black text-[10px]">
-                    {currentUser?.name?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="max-w-[100px] truncate">{currentUser?.name || 'My Account'}</span>
+                  Dashboard
                 </Link>
+                <Link
+                  to="/account/orders"
+                  className="block px-4 py-2 text-xs font-medium hover:bg-toyBg hover:text-toyOrange"
+                >
+                  My Orders
+                </Link>
+                <Link
+                  to="/account/wishlist"
+                  className="block px-4 py-2 text-xs font-medium hover:bg-toyBg hover:text-toyOrange"
+                >
+                  Wishlist
+                </Link>
+                <hr className="my-1 border-gray-100" />
                 <button
                   onClick={logout}
-                  className="text-gray-300 hover:text-toyRed transition-colors p-0.5 ml-1"
-                  title="Log Out"
+                  className="w-full text-left px-4 py-2 text-xs font-medium text-toyRed hover:bg-rose-50 flex items-center gap-2"
                 >
                   <LogOut size={14} />
+                  <span>Log Out</span>
                 </button>
               </div>
-            ) : (
-              <Link
-                to="/login"
-                className="hidden sm:flex items-center gap-1.5 text-xs font-bold uppercase text-gray-200 hover:text-toyOrange transition-colors cursor-pointer bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-full border border-white/15"
-              >
-                <span>Login / Register</span>
-              </Link>
-            )}
-          </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => openAuthDrawer('login')}
+              className="flex items-center gap-2 text-white hover:text-toyOrange transition-colors"
+            >
+              <div className="w-8 h-8 rounded-full bg-toyNavy-light border border-gray-700 flex items-center justify-center">
+                <User size={18} />
+              </div>
+              <div className="hidden xl:flex flex-col text-left">
+                <span className="text-[10px] text-gray-400 leading-tight">Account</span>
+                <span className="text-xs font-bold leading-tight">Login / Register</span>
+              </div>
+            </button>
+          )}
 
           {/* Shopping Cart Trigger */}
           <button
-            onClick={() => navigate('/cart')}
-            className="flex items-center gap-3 bg-toyOrange hover:bg-toyOrange-hover px-3 py-2 rounded-full border border-gray-700 transition-colors"
-            aria-label="View Shopping Cart"
+            onClick={toggleCart}
+            className="flex items-center gap-3 bg-toyNavy-light hover:bg-toyNavy-dark border border-gray-700 p-2 sm:px-3 sm:py-2 rounded-xl text-white transition-colors relative"
+            aria-label="View Cart"
           >
-            <div className="relative bg">
-              <span className="absolute -top-2 -right-2 bg-white text-toyOrange text-[10px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center shadow">
-                {totalItemsCount}
-              </span>
-              <ShoppingBag size={22} className="text-white" />
+            <div className="relative">
+              <ShoppingBag size={20} className="text-toyOrange" />
+              {totalItemsCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-toyRed text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow">
+                  {totalItemsCount}
+                </span>
+              )}
             </div>
             <div className="hidden sm:flex flex-col text-left">
-              <span className="text-xs font-bold text-white mt-0.5">
-                ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <span className="text-[10px] text-gray-400 uppercase leading-none font-semibold">
+                Cart
+              </span>
+              <span className="text-xs font-bold text-white leading-none mt-1">
+                ₹{subtotal.toLocaleString('en-IN')}
               </span>
             </div>
           </button>

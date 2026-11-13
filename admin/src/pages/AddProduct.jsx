@@ -23,6 +23,7 @@ import {
   Sliders,
   ChevronRight,
 } from "lucide-react";
+import { api } from "../lib/apiClient";
 
 const emptyProduct = {
   name: "",
@@ -544,12 +545,10 @@ export default function AddProduct() {
   const fetchMetadata = async () => {
     setLoadingMeta(true);
     try {
-      const [brandRes, catRes] = await Promise.all([
-        fetch("/api/admin/brands?limit=100"),
-        fetch("/api/admin/categories?limit=100"),
+      const [brandData, catData] = await Promise.all([
+        api.get("/api/admin/brands?limit=100"),
+        api.get("/api/admin/categories?limit=100"),
       ]);
-      const brandData = await brandRes.json();
-      const catData = await catRes.json();
 
       const bList = brandData.data || [];
       const cList = catData.data || [];
@@ -602,8 +601,7 @@ export default function AddProduct() {
     const fetchProductDetails = async () => {
       setLoadingProduct(true);
       try {
-        const res = await fetch(`/api/v1/products/${id}`);
-        const result = await res.json();
+        const result = await api.get(`/api/v1/products/${id}`);
         if (result.success && result.data) {
           const p = result.data;
 
@@ -798,18 +796,10 @@ export default function AddProduct() {
     };
 
     try {
-      const endpoint = isEditMode
-        ? `/api/v1/products/${id}`
-        : "/api/v1/products";
-      const method = isEditMode ? "PUT" : "POST";
-
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = isEditMode
+        ? await api.put(`/api/v1/products/${id}`, payload)
+        : await api.post("/api/v1/products", payload);
+      if (data.success) {
         setMsg({
           text: isEditMode
             ? "Product updated successfully & saved to PostgreSQL!"

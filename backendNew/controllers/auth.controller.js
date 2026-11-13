@@ -11,6 +11,8 @@ import { userValidator } from "../validators/userValidator.js";
 import cloudinary from "../utils/cloudinary.js";
 import { registerService } from "../services/auth.service.js";
 import ErrorWithStatus from "../config/ErrorWithStatus.js";
+import { normalizeEmail, formatAuthUser } from "../utils/authHelpers.js";
+import { clearJwtCookie, setJwtCookie } from "../utils/authCookies.js";
 
 // Handles user registration
 export const registerUser = async (req, res, next) => {
@@ -19,7 +21,7 @@ export const registerUser = async (req, res, next) => {
         if (error) {
             throw new ErrorWithStatus(error.message, HTTP_RES.BAD_REQUEST);
         }
-        const { email } = req.body;
+        const email = normalizeEmail(req.body.email);
 
         await registerService(email, value);
         return res.status(200).json({
@@ -35,7 +37,8 @@ export const registerUser = async (req, res, next) => {
 // Handles user login
 export const loginUser = async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const email = normalizeEmail(req.body.email);
+        const { password } = req.body;
         if (!email || !password) {
             throw new ErrorWithStatus("Email and password are required", HTTP_RES.BAD_REQUEST);
         }
@@ -45,11 +48,11 @@ export const loginUser = async (req, res, next) => {
             throw new ErrorWithStatus("User not found or unverified", HTTP_RES.NOT_FOUND);
         }
         if (!user.active) {
-            res.cookie("jwt", "", { maxAge: 0, sameSite: "None", secure: true });
+            clearJwtCookie(res);
             throw new ErrorWithStatus("User is blocked", HTTP_RES.FORBIDDEN);
         }
         if (user.is_google_login && !user.password) {
-            res.cookie("jwt", "", { maxAge: 0, sameSite: "None", secure: true });
+            clearJwtCookie(res);
             throw new ErrorWithStatus("Please log in using Google authentication", HTTP_RES.BAD_REQUEST);
         }
 
@@ -64,27 +67,13 @@ export const loginUser = async (req, res, next) => {
         });
 
         const token = generateToken(email);
-        return res
-            .cookie("jwt", token, {
-                httpOnly: true,
-                secure:   process.env.NODE_ENV === "production",
-                maxAge:   24 * 60 * 60 * 1000,
-                path:     "/",
-                sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-            })
-            .status(200)
-            .json({
-                message: "Logged In successfully",
-                token,
-                data: {
-                    id:         user.id,
-                    first_name: user.first_name,
-                    last_name:  user.last_name,
-                    email:      user.email,
-                    role:       user.role,
-                    avatar_url: user?.avatar_url ? (user.avatar_url.startsWith("http") ? user.avatar_url : cloudinary.url(user.avatar_url, { secure: true })) : null,
-                },
-            });
+        setJwtCookie(res, token);
+        return res.status(200).json({
+            message: "Logged In successfully",
+            status:  "success",
+            token,
+            data:    formatAuthUser(user),
+        });
     } catch (error) {
         next(error);
     }
@@ -92,7 +81,7 @@ export const loginUser = async (req, res, next) => {
 
 export const logoutUser = async (_req, res, next) => {
     try {
-        res.cookie("jwt", "", { maxAge: 0, sameSite: "None", secure: true });
+        clearJwtCookie(res);
         res.status(200).json({
             message: "Logged out successfully",
             status:  "success",
@@ -104,7 +93,8 @@ export const logoutUser = async (_req, res, next) => {
 
 export const verifyOTP = async (req, res, next) => {
     try {
-        const { email, otp_code, type } = req.body;
+        const email = normalizeEmail(req.body.email);
+        const { otp_code, type } = req.body;
         let cache_data = null;
         try {
             cache_data = await client.get(`OTP:${email}`);
@@ -146,9 +136,14 @@ export const verifyOTP = async (req, res, next) => {
             await client.set(`otp_verified:${email}`, "true", { EX: 600 });
         } catch {}
 
+        const token = generateToken(email);
+        setJwtCookie(res, token);
+
         return res.status(200).json({
             message: "OTP Verified successfully",
             status:  "success",
+            token,
+            data:    formatAuthUser(updatedUser),
         });
     } catch (error) {
         next(error);
@@ -157,7 +152,8 @@ export const verifyOTP = async (req, res, next) => {
 
 export const resendOTP = async (req, res, next) => {
     try {
-        const { email, type } = req.body;
+        const email = normalizeEmail(req.body.email);
+        const { type } = req.body;
         const otp_code = generateOtp();
 
         try {
@@ -190,7 +186,7 @@ export const resendOTP = async (req, res, next) => {
 
 export const forgetPassword = async (req, res, next) => {
     try {
-        const { email } = req.body;
+        const email = normalizeEmail(req.body.email);
         const user = await prisma.user.findFirst({ where: { email, is_verified: true } });
         if (!user) {
             throw new ErrorWithStatus("No user found with this email address", HTTP_RES.BAD_REQUEST);
@@ -225,7 +221,8 @@ export const forgetPassword = async (req, res, next) => {
 
 export const resetPassword = async (req, res, next) => {
     try {
-        const { email, password, confirm_password } = req.body;
+        const email = normalizeEmail(req.body.email);
+        const { password, confirm_password } = req.body;
         if (password !== confirm_password) {
             throw new ErrorWithStatus("Passwords do not match", HTTP_RES.BAD_REQUEST);
         }
@@ -279,27 +276,39 @@ export const getUserDetails = async (req, res, next) => {
                 role:        user.role,
                 active:      user.active,
                 cart:        cartCount,
-                refferal_id: user.refferal_id,
+                referral_id: user.referral_id,
                 avatar_url:  user.avatar_url || null,
             },
         });
     } catch (error) {
-        res.cookie("jwt", "", { maxAge: 0, sameSite: "None", secure: true });
+        clearJwtCookie(res);
         next(error);
     }
 };
 
 export const googleAuth = async (req, res, next) => {
-    const { code } = req.query;
     try {
+        const code = req.body?.code || req.query?.code;
+        if (!code) {
+            throw new ErrorWithStatus("Google authorization code is required", HTTP_RES.BAD_REQUEST);
+        }
+        if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+            throw new ErrorWithStatus("Google sign-in is not configured", HTTP_RES.BAD_REQUEST);
+        }
+
         const googleRes = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(googleRes.tokens);
         const userRes = await axios.get(
             `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`
         );
-        const { email, name } = userRes.data;
+        const email = normalizeEmail(userRes.data.email);
+        if (!email) {
+            throw new ErrorWithStatus("Google account has no email", HTTP_RES.BAD_REQUEST);
+        }
+
+        const { name, picture } = userRes.data;
         const [first_name = "User", ...restName] = (name || "").split(" ");
-        const last_name = restName.join(" ") || "";
+        const last_name = restName.join(" ") || "User";
 
         let user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
@@ -308,42 +317,44 @@ export const googleAuth = async (req, res, next) => {
                     first_name,
                     last_name,
                     email,
+                    avatar_url:      picture || null,
                     is_verified:     true,
                     is_google_login: true,
                     role:            "USER",
+                    last_login:      new Date(),
                 },
             });
-
-            await prisma.wallet.create({
-                data: { user_id: user.id, balance: 0 },
+        } else {
+            if (!user.active) {
+                throw new ErrorWithStatus("User is blocked", HTTP_RES.FORBIDDEN);
+            }
+            user = await prisma.user.update({
+                where: { id: user.id },
+                data:  {
+                    last_login: new Date(),
+                    ...(picture && !user.avatar_url ? { avatar_url: picture } : {}),
+                },
             });
         }
 
         if (!user.active) {
-            return res.status(403).json({ message: "User is blocked", status: "error" });
+            throw new ErrorWithStatus("User is blocked", HTTP_RES.FORBIDDEN);
         }
 
+        await prisma.wallet.upsert({
+            where:  { user_id: user.id },
+            update: {},
+            create: { user_id: user.id, balance: 0 },
+        });
+
         const token = generateToken(email);
-        return res
-            .status(200)
-            .cookie("jwt", token, {
-                httpOnly: true,
-                secure:   process.env.NODE_ENV === "production",
-                maxAge:   24 * 60 * 60 * 1000,
-                path:     "/",
-                sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-            })
-            .json({
-                message: "Google login successful",
-                token,
-                data: {
-                    id:         user.id,
-                    first_name: user.first_name,
-                    last_name:  user.last_name,
-                    email:      user.email,
-                    role:       user.role,
-                },
-            });
+        setJwtCookie(res, token);
+        return res.status(200).json({
+            message: "Google login successful",
+            status:  "success",
+            token,
+            data:    formatAuthUser(user),
+        });
     } catch (error) {
         next(error);
     }

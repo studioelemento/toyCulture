@@ -28,19 +28,26 @@ export const CartProvider = ({ children }) => {
 
   const showToast = (message) => {
     setToastMessage(message);
+    const duration = typeof message === 'string' && /log in/i.test(message) ? 5000 : 3000;
     setTimeout(() => {
       setToastMessage(null);
-    }, 3000);
+    }, duration);
   };
 
   const addToCart = (product, quantity = 1) => {
-    if (!product.inStock) {
-      showToast(`Sorry, "${product.name}" is currently out of stock.`);
+    const isOutOfStock = product?.inStock === false || product?.stock === 0;
+    if (isOutOfStock) {
+      showToast(`Sorry, "${product?.name || 'This item'}" is currently out of stock.`);
       return;
     }
 
     setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((item) => item.product.id === product.id);
+      const pId = product?.id || product?.slug;
+      const existingIndex = prevCart.findIndex((item) => {
+        const existingId = item.product?.id || item.product?.slug || item.id;
+        return existingId === pId;
+      });
+
       if (existingIndex > -1) {
         const updated = [...prevCart];
         updated[existingIndex] = {
@@ -53,11 +60,14 @@ export const CartProvider = ({ children }) => {
       }
     });
 
-    showToast(`"${product.name}" has been added to your cart.`);
+    showToast(`"${product?.name || 'Product'}" has been added to your cart.`);
   };
 
   const removeFromCart = (productId) => {
-    setCart((prevCart) => prevCart.filter((item) => item.product.id !== productId));
+    setCart((prevCart) => prevCart.filter((item) => {
+      const id = item.product?.id || item.product?.slug || item.id;
+      return id !== productId;
+    }));
   };
 
   const updateQuantity = (productId, newQuantity) => {
@@ -66,9 +76,10 @@ export const CartProvider = ({ children }) => {
       return;
     }
     setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.product.id === productId ? { ...item, quantity: newQuantity } : item
-      )
+      prevCart.map((item) => {
+        const id = item.product?.id || item.product?.slug || item.id;
+        return id === productId ? { ...item, quantity: newQuantity } : item;
+      })
     );
   };
 
@@ -76,9 +87,13 @@ export const CartProvider = ({ children }) => {
     setCart([]);
   };
 
-  const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItemsCount = cart.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => {
+    const p = item.product || item;
+    const price = Number(p.sellingPrice ?? p.price ?? 0);
+    return sum + price * (item.quantity || 1);
+  }, 0);
 
   const shippingFee = subtotal >= 2000 || subtotal === 0 ? 0 : 99;
 

@@ -6,6 +6,9 @@ export class AdminDashboardService {
     // SUMMARY KPIs  (total orders, revenue, products, users)
     // ─────────────────────────────────────────────────────────────────────────
     static async getSummary() {
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const customerWhere = { deletedAt: null, role: "USER" };
+
         const [
             totalOrders,
             deliveredOrders,
@@ -14,13 +17,17 @@ export class AdminDashboardService {
             lowStockProducts,
             totalUsers,
             revenueResult,
+            newUsersWeek,
+            activeCustomers,
+            blockedCustomers,
+            unverifiedCustomers,
         ] = await Promise.all([
             prisma.order.count({ where: { deletedAt: null } }),
             prisma.order.count({ where: { deletedAt: null, status: "DELIVERED" } }),
             prisma.product.count({ where: { deletedAt: null } }),
             prisma.product.count({ where: { deletedAt: null, is_active: true } }),
             prisma.product.count({ where: { deletedAt: null, is_active: true, stockQTY: { lt: 10 } } }),
-            prisma.user.count({ where: { deletedAt: null, role: "USER" } }),
+            prisma.user.count({ where: customerWhere }),
             prisma.order.aggregate({
                 where: {
                     deletedAt:      null,
@@ -28,17 +35,83 @@ export class AdminDashboardService {
                 },
                 _sum: { total_amount: true },
             }),
+            prisma.user.count({ where: { ...customerWhere, createdAt: { gte: weekAgo } } }),
+            prisma.user.count({ where: { ...customerWhere, active: true } }),
+            prisma.user.count({ where: { ...customerWhere, active: false } }),
+            prisma.user.count({ where: { ...customerWhere, is_verified: false } }),
         ]);
 
         return {
-            total_orders:     totalOrders,
-            delivered_orders: deliveredOrders,
-            total_products:   totalProducts,
-            active_products:  activeProducts,
-            low_stock_count:  lowStockProducts,
-            total_users:      totalUsers,
-            total_revenue:    revenueResult._sum.total_amount ?? 0,
+            total_orders:          totalOrders,
+            delivered_orders:      deliveredOrders,
+            total_products:        totalProducts,
+            active_products:       activeProducts,
+            low_stock_count:       lowStockProducts,
+            total_users:           totalUsers,
+            total_revenue:         revenueResult._sum.total_amount ?? 0,
+            new_users_week:        newUsersWeek,
+            active_customers:      activeCustomers,
+            blocked_customers:     blockedCustomers,
+            unverified_customers:  unverifiedCustomers,
         };
+    }
+
+    static async getCustomerSnapshot() {
+        const customerWhere = { deletedAt: null, role: "USER" };
+
+        const [recentCustomers, recentOrders] = await Promise.all([
+            prisma.user.findMany({
+                where:   customerWhere,
+                orderBy: { createdAt: "desc" },
+                take:    8,
+                select: {
+                    id:              true,
+                    first_name:      true,
+                    last_name:       true,
+                    email:           true,
+                    createdAt:       true,
+                    last_login:      true,
+                    is_verified:     true,
+                    is_google_login: true,
+                    active:          true,
+                },
+            }),
+            prisma.order.findMany({
+                where:   { deletedAt: null, user: { role: "USER" } },
+                orderBy: { createdAt: "desc" },
+                take:    6,
+                select: {
+                    id:           true,
+                    order_number: true,
+                    total_amount: true,
+                    status:       true,
+                    createdAt:    true,
+                    user: {
+                        select: { id: true, first_name: true, last_name: true, email: true },
+                    },
+                },
+            }),
+        ]);
+
+        const recent_customer_activity = [
+            ...recentCustomers.map((user) => ({
+                type:  "signup",
+                at:    user.createdAt,
+                label: `${[user.first_name, user.last_name].filter(Boolean).join(" ") || user.email} registered`,
+                user_id: user.id,
+            })),
+            ...recentOrders.map((order) => ({
+                type:  "order",
+                at:    order.createdAt,
+                label: `${[order.user?.first_name, order.user?.last_name].filter(Boolean).join(" ") || order.user?.email || "Customer"} placed ${order.order_number}`,
+                user_id: order.user?.id,
+                meta:  { order_id: order.id, amount: order.total_amount, status: order.status },
+            })),
+        ]
+            .sort((a, b) => new Date(b.at) - new Date(a.at))
+            .slice(0, 8);
+
+        return { recent_customers: recentCustomers, recent_customer_activity };
     }
 
     // ─────────────────────────────────────────────────────────────────────────

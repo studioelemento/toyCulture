@@ -19,24 +19,13 @@ export const authenticateUser = async (req, res, next) => {
                 }
             }
 
-            // In development, auto-attach dev admin to prevent locking out the admin workspace
-            if (process.env.NODE_ENV !== "production") {
+            if (process.env.ALLOW_DEV_AUTH_BYPASS === "true") {
                 let devAdmin = await prisma.user.findFirst({ where: { role: "ADMIN" } });
-                if (!devAdmin) {
-                    devAdmin = await prisma.user.create({
-                        data: {
-                            first_name: "Admin",
-                            last_name: "ToyCulture",
-                            email: "admin@toyculture.com",
-                            role: "ADMIN",
-                            is_verified: true,
-                            active: true,
-                        },
-                    });
+                if (devAdmin) {
+                    req.user = devAdmin;
+                    req.email = devAdmin.email;
+                    return next();
                 }
-                req.user  = devAdmin;
-                req.email = devAdmin.email;
-                return next();
             }
 
             throw new ErrorWithStatus("Unauthorized: No token provided", HTTP_RES.UNAUTHORIZED);

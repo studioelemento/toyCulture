@@ -1,55 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, Truck, ShieldCheck, RotateCcw, Check, Minus, Plus } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { newArrivalsProducts } from './Home/components/NewArrivals';
-
-// Fallback dummy data if product not found
-const MOCK_PRODUCT = {
-  id: 'new-1',
-  name: 'Remote Control Off-Road Truck',
-  slug: 'remote-control-off-road-truck',
-  brand: 'PowerCraze',
-  price: 2499,
-  badge: 'New',
-  rating: 4.6,
-  reviewsCount: 89,
-  description: 'Experience the thrill of off-road driving with this high-performance remote control truck. Built with durable materials, advanced suspension, and a powerful motor, it can conquer any terrain. Perfect for kids and hobbyists alike.',
-  features: [
-    '4WD Independent Suspension',
-    'High-Grip All Terrain Tires',
-    '2.4GHz Radio System for up to 100m range',
-    'Rechargeable Battery Included'
-  ],
-  images: [
-    'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=800&q=80',
-    'https://images.unsplash.com/photo-1594787317772-5bb92f3900be?auto=format&fit=crop&w=800&q=80'
-  ],
-  inStock: true,
-};
 
 export const ProductDetails = () => {
-  const { id } = useParams(); // the slug
+  const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
   
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [isWishlist, setIsWishlist] = useState(false);
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Find the product dynamically by slug, or fallback to mock
-  const foundProduct = newArrivalsProducts.find(p => p.slug === id);
-  const product = foundProduct ? {
-    ...MOCK_PRODUCT, 
-    ...foundProduct, 
-    images: [foundProduct.image, foundProduct.image] // using the single image twice for gallery mock
-  } : MOCK_PRODUCT;
+  useEffect(() => {
+    fetch(`/api/v1/products/${id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) {
+          setProduct(data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to load product:', err))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const handleAddToCart = () => {
-    // Add product to cart with quantity
+    if (!product) return;
     addToCart({ ...product, quantity });
-    // Optional: show a toast or feedback
   };
+
+  if (loading) {
+    return (
+      <div className="w-full bg-[#FAF9F5] min-h-screen py-16 flex items-center justify-center">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#F96515] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="w-full bg-[#FAF9F5] min-h-screen py-16 text-center">
+        <h2 className="text-xl font-bold text-[#0F243E]">Product not found</h2>
+        <button
+          onClick={() => navigate('/shop')}
+          className="mt-4 px-6 py-2.5 bg-[#F96515] text-white rounded-xl text-sm font-bold"
+        >
+          Back to Shop
+        </button>
+      </div>
+    );
+  }
+
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : [product.image || 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=800'];
 
   return (
     <div className="w-full bg-[#FAF9F5] min-h-screen py-8 md:py-12">
@@ -68,138 +74,89 @@ export const ProductDetails = () => {
           {/* Left Column: Images */}
           <div className="lg:col-span-6 flex flex-col gap-4">
             <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#FAF9F5] p-6 relative flex items-center justify-center">
-              <span className="absolute top-4 left-4 bg-[#10B981] text-white text-[12px] font-extrabold px-3 py-1 rounded-full shadow-sm">
-                {product.badge}
-              </span>
-              <button 
-                onClick={() => setIsWishlist(!isWishlist)}
-                className="absolute top-4 right-4 w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-md text-gray-400 hover:text-red-500 transition-colors"
-              >
-                <Heart className={`w-5 h-5 ${isWishlist ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
-              </button>
-              <img 
-                src={product.images[activeImage]} 
-                alt={product.name} 
+              <img
+                src={images[activeImage] || images[0]}
+                alt={product.name}
                 className="w-full h-full object-contain mix-blend-multiply"
               />
             </div>
-            
-            {/* Thumbnail Gallery */}
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {product.images.map((img, idx) => (
-                <button 
-                  key={idx}
-                  onClick={() => setActiveImage(idx)}
-                  className={`w-24 h-24 rounded-xl p-2 bg-[#FAF9F5] border-2 transition-all flex-shrink-0 ${activeImage === idx ? 'border-[#F96515] opacity-100' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                >
-                  <img src={img} alt="" className="w-full h-full object-contain mix-blend-multiply" />
-                </button>
-              ))}
-            </div>
+
+            {images.length > 1 && (
+              <div className="flex gap-3">
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveImage(idx)}
+                    className={`w-20 h-20 rounded-xl overflow-hidden bg-[#FAF9F5] p-2 border-2 transition-all ${
+                      activeImage === idx ? 'border-[#F96515]' : 'border-transparent'
+                    }`}
+                  >
+                    <img src={img} alt="" className="w-full h-full object-contain mix-blend-multiply" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Right Column: Details */}
-          <div className="lg:col-span-6 flex flex-col justify-center">
-            
-            <div className="mb-6">
-              <span className="text-[13px] font-bold text-[#8C98A9] uppercase tracking-wider mb-2 block">
+          {/* Right Column: Info */}
+          <div className="lg:col-span-6 flex flex-col justify-between">
+            <div>
+              <span className="text-xs font-bold text-[#8C98A9] uppercase tracking-wider">
                 {product.brand}
               </span>
-              <h1 className="text-3xl md:text-4xl lg:text-[42px] font-black text-[#0F243E] leading-tight font-title mb-4">
+              <h1 className="text-2xl md:text-3xl font-black text-[#0F243E] tracking-tight mt-1 mb-3">
                 {product.name}
               </h1>
-              
-              <div className="flex items-center gap-4">
-                <div className="flex items-center text-[#F59E0B]">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-5 h-5 fill-[#F59E0B]" strokeWidth={0} />
-                  ))}
-                </div>
-                <span className="text-[14px] font-bold text-[#55657E]">
-                  {product.rating} ({product.reviewsCount} reviews)
+
+              {/* Price */}
+              <div className="flex items-baseline gap-3 mb-6">
+                <span className="text-2xl md:text-3xl font-black text-[#0F243E]">
+                  ₹{Number(product.price).toLocaleString('en-IN')}
                 </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                <span className="text-[14px] font-bold text-[#10B981] flex items-center gap-1">
-                  <Check className="w-4 h-4" /> In Stock
-                </span>
+                {product.originalPrice && (
+                  <span className="text-base text-gray-400 line-through">
+                    ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+                  </span>
+                )}
               </div>
-            </div>
 
-            <div className="text-[32px] md:text-[40px] font-black text-[#0F243E] mb-6">
-              ₹{product.price.toLocaleString('en-IN')}
+              {/* Description */}
+              <p className="text-sm text-slate-600 leading-relaxed mb-6">
+                {product.description || product.small_description || 'High quality toy from ToyCulture.'}
+              </p>
             </div>
-
-            <p className="text-[15px] md:text-[16px] text-[#55657E] leading-relaxed mb-8">
-              {product.description}
-            </p>
 
             {/* Actions */}
-            <div className="flex flex-col sm:flex-row items-stretch gap-4 mb-10">
-              
-              {/* Quantity Selector */}
-              <div className="flex items-center justify-between bg-[#FAF9F5] border border-[#ECEFF2] rounded-2xl px-4 py-3 sm:w-1/3">
-                <button 
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-8 h-8 flex items-center justify-center text-[#0F243E] hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <Minus className="w-4 h-4" strokeWidth={3} />
-                </button>
-                <span className="text-lg font-bold text-[#0F243E] w-8 text-center">{quantity}</span>
-                <button 
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="w-8 h-8 flex items-center justify-center text-[#0F243E] hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4" strokeWidth={3} />
-                </button>
-              </div>
-
-              {/* Add to Cart Button */}
-              <button 
-                onClick={handleAddToCart}
-                className="flex-1 bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white text-[16px] font-bold rounded-2xl py-4 flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(249,101,21,0.25)] transition-all"
-              >
-                <ShoppingCart className="w-5 h-5" strokeWidth={2.5} />
-                <span>Add to Cart</span>
-              </button>
-            </div>
-
-            {/* Features & Trust Badges */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-8 border-t border-[#ECEFF2]">
-              <div className="space-y-3">
-                <h4 className="text-[15px] font-bold text-[#0F243E]">Key Features</h4>
-                <ul className="space-y-2">
-                  {product.features.map((feat, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-[14px] text-[#55657E]">
-                      <div className="mt-0.5 w-1.5 h-1.5 rounded-full bg-[#F96515] flex-shrink-0" />
-                      <span>{feat}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#FAF9F5] flex items-center justify-center text-[#0F243E]">
-                    <ShieldCheck className="w-5 h-5" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-bold text-[#0F243E]">1 Year Warranty</div>
-                    <div className="text-[12px] text-[#55657E]">100% Authentic Product</div>
-                  </div>
+            <div className="space-y-4 pt-6 border-t border-gray-100">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center border border-gray-200 rounded-xl p-1">
+                  <button
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-black"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-10 text-center font-bold text-sm">{quantity}</span>
+                  <button
+                    onClick={() => setQuantity((q) => q + 1)}
+                    className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-black"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#FAF9F5] flex items-center justify-center text-[#0F243E]">
-                    <RotateCcw className="w-5 h-5" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <div className="text-[13px] font-bold text-[#0F243E]">7 Days Return</div>
-                    <div className="text-[12px] text-[#55657E]">Hassle-free returns</div>
-                  </div>
-                </div>
+
+                <button
+                  onClick={handleAddToCart}
+                  className="flex-1 bg-[#F96515] hover:bg-[#EA580C] text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>Add to Cart</span>
+                </button>
               </div>
             </div>
 
           </div>
+
         </div>
       </div>
     </div>

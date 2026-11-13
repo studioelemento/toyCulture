@@ -2,7 +2,6 @@ import ErrorWithStatus from "../config/ErrorWithStatus.js";
 import client from "../config/redisClient.js";
 import { prisma } from "../config/prisma.js";
 import bcrypt from "bcrypt";
-import { nanoid } from "nanoid";
 import { HTTP_RES, OTP_EXPIRY_TIME, OTP_INVALID_TIME, OTP_TYPES } from "../utils/CONSTANTS.js";
 import { sendOTPMail } from "../utils/nodemailer.js";
 import { generateOtp } from "../utils/otp.js";
@@ -15,23 +14,26 @@ export const registerService = async (email, data) => {
         await prisma.user.delete({ where: { email } });
     }
 
+    let referredBy = null;
     if (data.refferal_code) {
-        const referredUser = await prisma.user.findFirst({ where: { refferal_id: data.refferal_code } });
+        const referredUser = await prisma.user.findFirst({
+            where: { referral_id: data.refferal_code },
+        });
         if (!referredUser) {
             throw new ErrorWithStatus("Invalid Referral Code", HTTP_RES.BAD_REQUEST);
         }
-        data.reffered_by = referredUser.refferal_id;
+        referredBy = referredUser.id;
     }
 
-    const { refferal_code, password, ...rest } = data;
+    const { refferal_code, password, confirm_password, ...rest } = data;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
-    const generatedReferralId = nanoid(8);
 
     await prisma.user.create({
         data: {
             ...rest,
+            email:       email,
             password:    hashedPassword,
-            refferal_id: generatedReferralId,
+            referred_by: referredBy,
             is_verified: false,
             role:        "USER",
         },

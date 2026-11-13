@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, extractList } from '../../lib/accountHelpers';
 
 export default function MyWishlist() {
   const { currentUser, logout } = useAuth();
@@ -30,14 +32,7 @@ export default function MyWishlist() {
     window.scrollTo(0, 0);
   }, []);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -50,99 +45,25 @@ export default function MyWishlist() {
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // Wishlist products matching the reference design exactly
-  const initialWishlistItems = [
-    {
-      id: 'wl-1',
-      name: 'Lamborghini Huracán LP 610-4',
-      price: 2399,
-      rating: 4.8,
-      reviews: 124,
-      inStock: true,
-      image: '/product-lamborghini.jpg',
-      badge: 'In Stock',
-      category: 'Die-cast Vehicles',
-    },
-    {
-      id: 'wl-2',
-      name: 'LEGO Classic Creative Bricks Box',
-      price: 1499,
-      rating: 4.6,
-      reviews: 89,
-      inStock: true,
-      image: '/product-lego.jpg',
-      badge: 'In Stock',
-      category: 'Building Blocks',
-    },
-    {
-      id: 'wl-3',
-      name: 'Barbie Fashion Doll',
-      price: 999,
-      rating: 4.7,
-      reviews: 112,
-      inStock: true,
-      image: '/product-barbie.jpg',
-      badge: 'In Stock',
-      category: 'Dolls',
-    },
-    {
-      id: 'wl-4',
-      name: 'Remote Control Jeep 4x4',
-      price: 1899,
-      rating: 4.5,
-      reviews: 76,
-      inStock: true,
-      image: '/product-jeep.jpg',
-      badge: 'In Stock',
-      category: 'Remote Control',
-    },
-    {
-      id: 'wl-5',
-      name: 'Hot Wheels 5 Car Pack',
-      price: 799,
-      rating: 4.6,
-      reviews: 95,
-      inStock: true,
-      image: '/product-hotwheels.jpg',
-      badge: 'In Stock',
-      category: 'Die-cast Vehicles',
-    },
-    {
-      id: 'wl-6',
-      name: 'Dinosaur Action Figure Set',
-      price: 1299,
-      rating: 4.4,
-      reviews: 68,
-      inStock: false,
-      image: '/product-dinosaur.jpg',
-      badge: 'Out of Stock',
-      category: 'Action Figures',
-    },
-    {
-      id: 'wl-7',
-      name: 'STEM Robot Building Kit',
-      price: 1699,
-      rating: 4.6,
-      reviews: 73,
-      inStock: true,
-      image: '/product-robot.jpg',
-      badge: 'In Stock',
-      category: 'Learning & STEM',
-    },
-    {
-      id: 'wl-8',
-      name: 'Soft Teddy Bear (40 cm)',
-      price: 1099,
-      rating: 4.8,
-      reviews: 101,
-      inStock: true,
-      image: '/product-teddy.jpg',
-      badge: 'In Stock',
-      category: 'Soft Toys',
-    },
-  ];
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [items, setItems] = useState(initialWishlistItems);
+  const fetchWishlist = async () => {
+    try {
+      setLoading(true);
+      const json = await api.get('/api/wishlist');
+      setItems(extractList(json));
+    } catch (err) {
+      console.error('Error fetching wishlist:', err);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchWishlist();
+  }, [currentUser]);
   const [filter, setFilter] = useState('all'); // 'all', 'in-stock', 'out-of-stock'
   const [sortBy, setSortBy] = useState('recent'); // 'recent', 'price-low', 'price-high'
   const [viewMode, setViewMode] = useState('grid'); // 'grid' (default matching mockup) or 'list'
@@ -153,14 +74,20 @@ export default function MyWishlist() {
   const inStockCount = items.filter((i) => i.inStock).length;
   const outOfStockCount = items.filter((i) => !i.inStock).length;
 
-  const handleToggleHeart = (id) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+  const handleToggleHeart = async (id, productId) => {
+    const targetId = productId || id;
+    setItems((prev) => prev.filter((item) => item.id !== id && item.productId !== targetId));
+    try {
+      await api.delete(`/api/wishlist/${targetId}`);
+    } catch (err) {
+      console.error('Failed to remove from wishlist:', err);
+    }
   };
 
   const handleAddToCart = (item) => {
     if (!item.inStock) return;
     addToCart({
-      id: item.id,
+      id: item.productId || item.id,
       name: item.name,
       price: item.price,
       image: item.image,
@@ -490,9 +417,11 @@ export default function MyWishlist() {
                     {/* Middle Details Column */}
                     <div className="flex-1 min-w-0 pr-8">
                       {/* Title */}
-                      <h4 className="text-sm font-black text-[#0B1B3D] tracking-tight leading-snug line-clamp-2">
-                        {item.name}
-                      </h4>
+                      <Link to={`/product/${item.productId || item.id}`}>
+                        <h4 className="text-sm font-black text-[#0B1B3D] tracking-tight leading-snug line-clamp-2 hover:text-[#F96515] transition-colors">
+                          {item.name}
+                        </h4>
+                      </Link>
 
                       {/* Rating & Review Count */}
                       <div className="flex items-center gap-1.5 mt-1">
@@ -526,7 +455,7 @@ export default function MyWishlist() {
 
                     {/* Top Right Heart Icon */}
                     <button
-                      onClick={() => handleToggleHeart(item.id)}
+                      onClick={() => handleToggleHeart(item.id, item.productId)}
                       className="absolute top-3.5 right-3.5 p-1 text-rose-500 hover:scale-110 transition-transform"
                       title={item.inStock ? "Remove from wishlist" : "Wishlist item"}
                     >
@@ -591,7 +520,7 @@ export default function MyWishlist() {
                       <div className="relative aspect-square w-full rounded-2xl bg-[#F8FAFC] p-3 flex items-center justify-center overflow-hidden mb-3">
                         {/* Top-Right Heart Icon matching reference mockup */}
                         <button
-                          onClick={() => handleToggleHeart(item.id)}
+                          onClick={() => handleToggleHeart(item.id, item.productId)}
                           className="absolute top-2.5 right-2.5 z-10 p-1 text-rose-500 hover:scale-110 transition-transform"
                           aria-label="Wishlist Heart"
                         >
@@ -613,9 +542,11 @@ export default function MyWishlist() {
                       </div>
 
                       {/* Title */}
-                      <h4 className="text-xs sm:text-sm font-black text-[#0B1B3D] line-clamp-2 leading-snug tracking-tight mb-1.5 h-9 sm:h-10">
-                        {item.name}
-                      </h4>
+                      <Link to={`/product/${item.productId || item.id}`}>
+                        <h4 className="text-xs sm:text-sm font-black text-[#0B1B3D] line-clamp-2 leading-snug tracking-tight mb-1.5 h-9 sm:h-10 hover:text-[#F96515] transition-colors">
+                          {item.name}
+                        </h4>
+                      </Link>
 
                       {/* Ratings */}
                       <div className="flex items-center gap-1.5 mb-2">

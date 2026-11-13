@@ -2,15 +2,22 @@ import React, { useState } from 'react';
 import { X, ShoppingBag, Check, ShieldCheck } from 'lucide-react';
 import { StarRating } from '../Rating/StarRating';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { requireLoginForPurchase } from '../../lib/requireLoginAction';
 
 export const QuickViewModal = ({ product, isOpen, onClose }) => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const { addToCart, setIsCartOpen } = useCart();
+  const { addToCart, setIsCartOpen, showToast } = useCart();
+  const { isLoggedIn, isBootstrapping, openAuthDrawer } = useAuth();
   const navigate = useNavigate();
 
   if (!isOpen || !product) return null;
+
+  const images = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : [product.image || 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600'];
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
@@ -20,6 +27,16 @@ export const QuickViewModal = ({ product, isOpen, onClose }) => {
 
   const handleBuyNow = () => {
     addToCart(product, quantity);
+    if (
+      !requireLoginForPurchase({
+        isLoggedIn,
+        isBootstrapping,
+        openAuthDrawer,
+        showToast,
+      })
+    ) {
+      return;
+    }
     onClose();
     navigate('/checkout');
   };
@@ -47,9 +64,13 @@ export const QuickViewModal = ({ product, isOpen, onClose }) => {
         <div className="md:w-1/2 p-6 bg-gray-50 flex flex-col justify-between items-center border-r border-gray-100">
           <div className="relative w-full aspect-square bg-white rounded-xl overflow-hidden shadow-inner mb-4 flex items-center justify-center">
             <img
-              src={product.images[selectedImage] || product.images[0]}
+              src={images[selectedImage] || images[0]}
               alt={product.name}
               className="w-full h-full object-contain p-4"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = "https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600";
+              }}
             />
             {product.discount && (
               <span className="absolute top-3 left-3 bg-toyRed text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow">
@@ -64,9 +85,9 @@ export const QuickViewModal = ({ product, isOpen, onClose }) => {
           </div>
 
           {/* Thumbnails */}
-          {product.images.length > 1 && (
+          {images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto max-w-full py-1">
-              {product.images.map((img, idx) => (
+              {images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSelectedImage(idx)}
@@ -81,110 +102,102 @@ export const QuickViewModal = ({ product, isOpen, onClose }) => {
           )}
         </div>
 
-        {/* Right Column: Product Details */}
-        <div className="md:w-1/2 p-6 overflow-y-auto flex flex-col justify-between">
+        {/* Right Column: Product Info & Actions */}
+        <div className="md:w-1/2 p-6 md:p-8 flex flex-col justify-between overflow-y-auto">
           <div>
-            <div className="text-xs font-bold text-toyOrange uppercase tracking-wider mb-1">
-              {product.brand}
+            {/* Brand & Category */}
+            <div className="flex items-center justify-between text-xs font-bold text-gray-400 mb-1">
+              <span className="uppercase tracking-wider">{product.brand || 'ToyCulture'}</span>
+              <span>{product.category || 'Toys'}</span>
             </div>
-            <h2 className="text-lg font-bold text-toyText-heading leading-tight mb-2">
+
+            {/* Title */}
+            <h2 className="text-xl md:text-2xl font-black text-toyText-heading mb-2 leading-tight">
               {product.name}
             </h2>
 
             {/* Rating */}
             <div className="mb-4">
-              <StarRating rating={product.rating} reviewCount={product.reviewCount} />
+              <StarRating rating={product.rating || 4.8} reviewCount={product.reviews || product.reviewCount || 0} />
             </div>
 
-            {/* Pricing */}
-            <div className="flex items-baseline gap-3 mb-4 bg-toyBg-single p-3 rounded-xl">
-              <span className="text-2xl font-black text-toyOrange">
-                ₹{product.price.toLocaleString('en-IN')}
+            {/* Price */}
+            <div className="flex items-baseline gap-3 mb-4">
+              <span className="text-2xl font-black text-toyText-heading">
+                ₹{Number(product.price || 0).toLocaleString('en-IN')}
               </span>
-              {product.originalPrice && product.originalPrice > product.price && (
-                <span className="text-sm text-gray-400 line-through font-medium">
-                  ₹{product.originalPrice.toLocaleString('en-IN')}
+              {product.originalPrice && (
+                <span className="text-sm text-gray-400 line-through">
+                  ₹{Number(product.originalPrice).toLocaleString('en-IN')}
                 </span>
               )}
             </div>
 
-            {/* Description excerpt */}
-            <p className="text-xs text-toyText-secondary leading-relaxed mb-4 line-clamp-3">
-              {product.description}
+            {/* Description */}
+            <p className="text-xs md:text-sm text-gray-600 mb-6 line-clamp-3 leading-relaxed">
+              {product.description || product.small_description || 'Premium quality toy from ToyCulture.'}
             </p>
 
-            {/* Specifications quick summary */}
-            <div className="grid grid-cols-2 gap-2 text-xs mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
-              <div>
-                <span className="text-gray-400 font-medium">SKU:</span>{' '}
-                <span className="font-bold text-toyText-primary">{product.sku}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 font-medium">Age Group:</span>{' '}
-                <span className="font-bold text-toyText-primary">{product.ageGroup}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 font-medium">Material:</span>{' '}
-                <span className="font-bold text-toyText-primary">{product.material}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 font-medium">Stock:</span>{' '}
-                <span
-                  className={`font-bold ${
-                    product.inStock ? 'text-toyGreen' : 'text-toyRed'
-                  }`}
-                >
-                  {product.inStock ? 'In Stock' : 'Sold Out'}
+            {/* Stock Status */}
+            <div className="mb-6 flex items-center gap-2 text-xs font-bold">
+              <span className="text-gray-500">Availability:</span>
+              {product.inStock !== false ? (
+                <span className="text-toyGreen flex items-center gap-1">
+                  <Check size={14} /> In Stock
                 </span>
-              </div>
+              ) : (
+                <span className="text-toyRed">Out of Stock</span>
+              )}
             </div>
           </div>
 
-          {/* Action buttons & quantity */}
-          {product.inStock ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-gray-700">Quantity:</span>
-                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white">
-                  <button
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="px-3 py-1 text-sm font-bold text-gray-600 hover:bg-gray-100"
-                  >
-                    -
-                  </button>
-                  <span className="px-3 py-1 text-xs font-extrabold text-toyText-primary min-w-[2rem] text-center">
-                    {quantity}
-                  </span>
-                  <button
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="px-3 py-1 text-sm font-bold text-gray-600 hover:bg-gray-100"
-                  >
-                    +
-                  </button>
-                </div>
+          {/* Action Footer */}
+          <div className="space-y-3 pt-4 border-t border-gray-100">
+            {/* Quantity Selector */}
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-xs font-bold text-gray-700">Quantity:</span>
+              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setQuantity((prev) => Math.max(1, prev - 1))}
+                  className="px-3 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors"
+                >
+                  -
+                </button>
+                <span className="px-4 py-1 font-bold text-sm text-gray-800">{quantity}</span>
+                <button
+                  onClick={() => setQuantity((prev) => prev + 1)}
+                  className="px-3 py-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold transition-colors"
+                >
+                  +
+                </button>
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={handleAddToCart}
-                  className="bg-toyNavy hover:bg-toyNavy-light text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow"
-                >
-                  <ShoppingBag size={16} />
-                  <span>Add to Cart</span>
-                </button>
-                <button
-                  onClick={handleBuyNow}
-                  className="bg-toyOrange hover:bg-toyOrange-hover text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow"
-                >
-                  <span>Buy Now</span>
-                </button>
-              </div>
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddToCart}
+                disabled={product.inStock === false}
+                className="flex-1 bg-toyOrange hover:bg-toyOrange-hover disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 text-sm"
+              >
+                <ShoppingBag size={18} />
+                Add to Cart
+              </button>
+              <button
+                onClick={handleBuyNow}
+                disabled={product.inStock === false}
+                className="flex-1 bg-toyText-heading hover:bg-gray-900 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-3 px-4 rounded-xl shadow-md transition-colors text-sm"
+              >
+                Buy Now
+              </button>
             </div>
-          ) : (
-            <div className="bg-red-50 text-toyRed p-3 rounded-xl text-center text-xs font-bold border border-red-200">
-              This product is currently out of stock.
+
+            {/* Security note */}
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 pt-2">
+              <ShieldCheck size={14} className="text-toyGreen" />
+              <span>Safe & Secure Checkout Guaranteed</span>
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

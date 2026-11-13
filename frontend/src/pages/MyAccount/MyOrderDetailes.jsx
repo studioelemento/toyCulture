@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, formatAddress, mapStoreOrder } from '../../lib/accountHelpers';
 
 export default function MyOrderDetailes() {
   const { currentUser, logout } = useAuth();
@@ -31,25 +33,24 @@ export default function MyOrderDetailes() {
   const { id } = useParams();
 
   const [liveOrder, setLiveOrder] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
 
   useEffect(() => {
     let isMounted = true;
-    if (!id || id === 'TC10482') return;
+    if (!id) return;
 
     const fetchOrderDetail = async () => {
       try {
         setLoading(true);
-        const userEmail = currentUser?.email || 'customer@toyculture.com';
-        const res = await fetch(`/api/order/${id}`, {
-          headers: { 'x-user-email': userEmail }
-        });
-        const json = await res.json();
+        const json = await api.get(`/api/order/${id}`);
         if (json.status === 'success' && json.data) {
           if (isMounted) setLiveOrder(json.data);
+        } else if (isMounted) {
+          setLiveOrder(null);
         }
       } catch (err) {
         console.error('Failed to load order detail:', err);
+        if (isMounted) setLiveOrder(null);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -63,14 +64,7 @@ export default function MyOrderDetailes() {
     window.scrollTo(0, 0);
   }, []);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -83,53 +77,32 @@ export default function MyOrderDetailes() {
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // Fallback ordered items matching reference image
-  const fallbackOrderItems = [
-    {
-      id: 'item-1',
-      name: 'Lamborghini Huracán LP 610-4',
-      brand: 'Maisto',
-      material: 'Die-cast Metal',
-      scale: 'Scale 1:18',
-      price: 2399,
-      quantity: 1,
-      image: '/lamborghini.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/12/4.png'
-    },
-    {
-      id: 'item-2',
-      name: 'Building Blocks Set – 100 Pieces',
-      brand: 'Toy World',
-      material: 'Plastic',
-      scale: '',
-      price: 599,
-      quantity: 1,
-      image: '/lego.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp'
-    }
-  ];
-
-  const orderItems = liveOrder?.items?.length ? liveOrder.items.map((it, idx) => ({
+  const mappedOrder = liveOrder ? mapStoreOrder(liveOrder) : null;
+  const orderItems = (liveOrder?.items || []).map((it, idx) => ({
     id: it.id || `item-${idx}`,
     name: it.product_name || 'Toy Product',
-    brand: 'ToyCulture',
+    brand: '',
     material: '',
     scale: '',
     price: Number(it.price || 0),
     quantity: it.quantity || 1,
-    image: it.product_image || '/lamborghini.jpg',
-    fallback: '/lamborghini.jpg'
-  })) : fallbackOrderItems;
+    image: it.product_image || '',
+  }));
 
-  const displayOrderNumber = liveOrder?.order_number || liveOrder?.id || (id || 'TC10482');
-  const displayOrderDate = liveOrder?.createdAt ? new Date(liveOrder.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '21 Oct 2026 at 10:24 AM';
-  const displayStatus = (liveOrder?.status || 'Delivered').toUpperCase();
-  const displayPaymentMethod = liveOrder?.payment_method ? (liveOrder.payment_method === 'COD' ? 'Cash on Delivery (COD)' : liveOrder.payment_method) : 'UPI (Google Pay)';
-  const displayShipping = liveOrder?.shipping_address || null;
-  const displaySubtotal = liveOrder ? (Number(liveOrder.subtotal) || orderItems.reduce((acc, it) => acc + (it.price * it.quantity), 0)) : 2998;
-  const displayDiscount = liveOrder ? Number(liveOrder.coupon_discount || 0) : 300;
-  const displayTotal = liveOrder ? Number(liveOrder.total_amount || 0) : 2698;
-  const displayDeliveryFee = liveOrder ? (liveOrder.delivery_charge || 0) : 0;
+  const displayOrderNumber = liveOrder?.order_number || liveOrder?.id || id || '';
+  const displayOrderDate = liveOrder?.createdAt
+    ? new Date(liveOrder.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const displayStatus = (liveOrder?.status || '').toUpperCase();
+  const displayPaymentMethod = liveOrder?.payment_method
+    ? (liveOrder.payment_method === 'COD' ? 'Cash on Delivery (COD)' : liveOrder.payment_method)
+    : '';
+  const displayShipping = formatAddress(liveOrder?.shipping_address);
+  const displaySubtotal = orderItems.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+  const displayDiscount = Number(liveOrder?.coupon_discount || 0);
+  const displayTotal = Number(liveOrder?.total_amount || 0);
+  const displayDeliveryFee = Number(liveOrder?.delivery_fee || liveOrder?.delivery_charge || 0);
+  const heroImage = orderItems[0]?.image || '';
 
   const handleLogout = () => {
     logout();
@@ -276,11 +249,15 @@ export default function MyOrderDetailes() {
 
               <div className="relative z-10 flex-shrink-0 flex items-center justify-end">
                 <div className="w-36 h-24 sm:w-48 sm:h-28 bg-[#FFF5F5] rounded-2xl p-2 border border-red-100/70 shadow-xs flex items-center justify-center overflow-hidden">
-                  <img
-                    src="/lamborghini.jpg"
-                    alt="Maisto Lamborghini Huracán"
-                    className="max-h-full max-w-full object-contain"
-                  />
+                  {heroImage ? (
+                    <img
+                      src={heroImage}
+                      alt={orderItems[0]?.name || 'Order item'}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <Package className="w-10 h-10 text-slate-300" />
+                  )}
                 </div>
               </div>
             </div>
@@ -304,18 +281,22 @@ export default function MyOrderDetailes() {
                     Placed on {displayOrderDate}
                   </p>
                   <p className="text-[11px] sm:text-xs text-slate-400 font-medium">
-                    {orderItems.length} item${orderItems.length === 1 ? '' : 's'} <span className="mx-1.5">|</span> Paid via {displayPaymentMethod}
+                    {orderItems.length} item{orderItems.length === 1 ? '' : 's'} <span className="mx-1.5">|</span> Paid via {displayPaymentMethod}
                   </p>
                 </div>
 
                 {/* Mobile Right Car Preview (matches mobile phone screenshot) */}
                 <div className="block lg:hidden flex-shrink-0">
                   <div className="w-24 h-16 bg-[#FFF5F5] rounded-2xl p-1.5 border border-red-100/70 shadow-xs flex items-center justify-center overflow-hidden">
-                    <img
-                      src="/lamborghini.jpg"
-                      alt="Car"
-                      className="max-h-full max-w-full object-contain"
-                    />
+                    {heroImage ? (
+                      <img
+                        src={heroImage}
+                        alt={orderItems[0]?.name || 'Order item'}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <Package className="w-6 h-6 text-slate-300" />
+                    )}
                   </div>
                 </div>
 
@@ -340,81 +321,39 @@ export default function MyOrderDetailes() {
                 </div>
               </div>
 
-              {/* 4-Step Progress Stepper matching mobile phone design */}
               <div className="pt-2 px-1 sm:px-6">
                 <div className="relative flex items-center justify-between">
-                  {/* Progress Line */}
-                  <div className="absolute top-2.5 sm:top-3 left-4 sm:left-6 right-4 sm:right-6 h-0.5 bg-emerald-500 -z-0"></div>
-
-                  {/* Step 1: Placed */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] sm:text-xs font-bold shadow-xs">
-                      ✓
-                    </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-800 mt-1.5 sm:mt-2">
-                      Placed
-                    </span>
-                    <span className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5">
-                      <span className="sm:hidden">21 Oct</span>
-                      <span className="hidden sm:inline">21 Oct 2026, 10:24 AM</span>
-                    </span>
+                  <div className="absolute top-2.5 sm:top-3 left-4 sm:left-6 right-4 sm:right-6 h-0.5 bg-slate-200 -z-0">
+                    <div className={`h-full ${mappedOrder?.lineColor || 'bg-emerald-500'}`} style={{ width: mappedOrder?.progressWidth || '20%' }} />
                   </div>
-
-                  {/* Step 2: Shipped */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] sm:text-xs font-bold shadow-xs">
-                      ✓
+                  {(mappedOrder?.steps || []).map((step) => (
+                    <div key={step.label} className="relative z-10 flex flex-col items-center text-center">
+                      <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[9px] sm:text-xs font-bold shadow-xs ${
+                        step.done ? 'bg-emerald-500 text-white' : 'bg-white border-2 border-slate-300 text-slate-300'
+                      }`}>
+                        {step.done ? '✓' : ''}
+                      </div>
+                      <span className="text-[10px] sm:text-xs font-bold text-slate-800 mt-1.5 sm:mt-2">
+                        {step.label}
+                      </span>
+                      <span className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5">
+                        {step.date}
+                      </span>
                     </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-800 mt-1.5 sm:mt-2">
-                      Shipped
-                    </span>
-                    <span className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5">
-                      <span className="sm:hidden">22 Oct</span>
-                      <span className="hidden sm:inline">22 Oct 2026, 04:10 PM</span>
-                    </span>
-                  </div>
-
-                  {/* Step 3: Out for Delivery */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] sm:text-xs font-bold shadow-xs">
-                      ✓
-                    </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-800 mt-1.5 sm:mt-2">
-                      Out for Delivery
-                    </span>
-                    <span className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5">
-                      <span className="sm:hidden">23 Oct</span>
-                      <span className="hidden sm:inline">23 Oct 2026, 09:15 AM</span>
-                    </span>
-                  </div>
-
-                  {/* Step 4: Delivered */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] sm:text-xs font-bold shadow-xs">
-                      ✓
-                    </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-slate-800 mt-1.5 sm:mt-2">
-                      Delivered
-                    </span>
-                    <span className="text-[8px] sm:text-[10px] text-slate-400 mt-0.5">
-                      <span className="sm:hidden">24 Oct</span>
-                      <span className="hidden sm:inline">24 Oct 2026, 05:22 PM</span>
-                    </span>
-                  </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Delivery Notification Card */}
               <div className="rounded-2xl bg-[#F0FDF4] border border-emerald-100 p-3 sm:p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
                   <Package size={22} />
                 </div>
                 <div>
                   <h4 className="text-xs sm:text-sm font-black text-slate-800">
-                    Delivered
+                    {displayStatus || 'Placed'}
                   </h4>
                   <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                    24 Oct 2026 at 05:22 PM
+                    {displayOrderDate}
                   </p>
                 </div>
               </div>
@@ -451,8 +390,7 @@ export default function MyOrderDetailes() {
                             alt={item.name}
                             className="max-h-full max-w-full object-contain"
                             onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = item.fallback;
+                              e.currentTarget.style.display = 'none';
                             }}
                           />
                         </div>
@@ -510,16 +448,23 @@ export default function MyOrderDetailes() {
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Delivered
+                  {displayStatus || 'Placed'}
                 </span>
               </div>
 
               <div className="mt-3 text-xs text-slate-600 space-y-1 font-medium leading-relaxed">
-                <p className="font-bold text-[#0B1B3D] text-sm">{displayName}</p>
-                <p>TC 12/345, Main Road</p>
-                <p>Kumarapuram, Thiruvananthapuram</p>
-                <p>Kerala, 695001</p>
-                <p className="text-slate-700 font-semibold pt-0.5">+91 98765 43210</p>
+                {displayShipping ? (
+                  <>
+                    <p className="font-bold text-[#0B1B3D] text-sm">{displayShipping.name || displayName}</p>
+                    <p>{displayShipping.line1}</p>
+                    {displayShipping.line2 ? <p>{displayShipping.line2}</p> : null}
+                    <p>{[displayShipping.city, displayShipping.state].filter(Boolean).join(', ')}</p>
+                    {displayShipping.pincode ? <p>{displayShipping.pincode}</p> : null}
+                    {displayShipping.phone ? <p className="text-slate-700 font-semibold pt-0.5">{displayShipping.phone}</p> : null}
+                  </>
+                ) : (
+                  <p>No shipping address on this order.</p>
+                )}
               </div>
             </div>
 
@@ -534,22 +479,22 @@ export default function MyOrderDetailes() {
                 </div>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Paid
+                  {liveOrder?.payment_status || 'PENDING'}
                 </span>
               </div>
 
               <div className="mt-3 space-y-2 text-xs">
                 <div className="flex justify-between items-center text-slate-500">
                   <span>Payment Method</span>
-                  <span className="font-bold text-slate-800">UPI (Google Pay)</span>
+                  <span className="font-bold text-slate-800">{displayPaymentMethod || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-500">
                   <span>Transaction ID</span>
-                  <span className="font-mono text-slate-700 font-semibold">pay_Lz9f8s7a2H3K1</span>
+                  <span className="font-mono text-slate-700 font-semibold">{liveOrder?.transaction_id || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-500">
                   <span>Payment Date</span>
-                  <span className="font-medium text-slate-700">21 Oct 2026, 10:24 AM</span>
+                  <span className="font-medium text-slate-700">{displayOrderDate || '—'}</span>
                 </div>
               </div>
 
@@ -570,17 +515,19 @@ export default function MyOrderDetailes() {
 
               <div className="mt-3 space-y-2 text-xs">
                 <div className="flex justify-between items-center text-slate-600">
-                  <span>Subtotal (2 items)</span>
+                  <span>Subtotal ({orderItems.length} item{orderItems.length === 1 ? '' : 's'})</span>
                   <span className="font-bold text-slate-800">₹{Number(displaySubtotal).toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-600">
                   <span>Shipping Charges</span>
-                  <span className="font-bold text-emerald-600">₹0</span>
+                  <span className="font-bold text-emerald-600">₹{Number(displayDeliveryFee).toLocaleString('en-IN')}</span>
                 </div>
+                {displayDiscount > 0 && (
                 <div className="flex justify-between items-center text-emerald-600">
-                  <span>Discount (WELCOME10)</span>
+                  <span>Discount{liveOrder?.coupon?.code ? ` (${liveOrder.coupon.code})` : ''}</span>
                   <span className="font-bold">- ₹{Number(displayDiscount).toLocaleString('en-IN')}</span>
                 </div>
+                )}
               </div>
 
               <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
@@ -620,7 +567,7 @@ export default function MyOrderDetailes() {
                   <span>Return or Replace Items</span>
                 </button>
                 <button
-                  onClick={() => alert('Invoice TC10482 downloaded.')}
+                  onClick={() => alert(displayOrderNumber ? `Invoice for ${displayOrderNumber}` : 'Invoice unavailable')}
                   className="w-full flex items-center gap-2 hover:text-[#4F46E5] transition-colors text-left"
                 >
                   <Download size={15} className="text-slate-400" />

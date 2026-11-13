@@ -20,6 +20,8 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, digitsOnly, extractList, formatAddress } from '../../lib/accountHelpers';
 
 export default function MyAddresses() {
   const { currentUser, logout } = useAuth();
@@ -29,14 +31,7 @@ export default function MyAddresses() {
     window.scrollTo(0, 0);
   }, []);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -49,83 +44,32 @@ export default function MyAddresses() {
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // Fallback initial addresses
-  const initialAddresses = [
-    {
-      id: 'addr-1',
-      type: 'Home',
-      icon: HomeIcon,
-      isDefault: true,
-      name: 'Anand R V',
-      line1: 'TC 12/345, Main Road',
-      line2: 'Kumarapuram',
-      cityState: 'Thiruvananthapuram, Kerala 695001',
-      pincode: '695001',
-      mobile: '+91 98765 43210',
-      color: 'blue'
-    },
-    {
-      id: 'addr-2',
-      type: 'Office',
-      icon: Briefcase,
-      isDefault: false,
-      name: 'Anand R V',
-      line1: '2nd Floor, Technopark Phase 1',
-      line2: 'Kazhakkoottam',
-      cityState: 'Thiruvananthapuram, Kerala 695581',
-      pincode: '695581',
-      mobile: '+91 98765 43210',
-      color: 'slate'
-    },
-    {
-      id: 'addr-3',
-      type: 'Other',
-      icon: MapPin,
-      isDefault: false,
-      name: 'Anand R V',
-      line1: 'Door No. 18/220, Beach Road',
-      line2: 'Kovalam',
-      cityState: 'Thiruvananthapuram, Kerala 695527',
-      pincode: '695527',
-      mobile: '+91 98765 43210',
-      color: 'amber'
-    }
-  ];
+  const mapUiAddress = (addr) => {
+    const formatted = formatAddress(addr);
+    if (!formatted) return null;
+    const isWork = formatted.type === 'Office';
+    const isHome = formatted.type === 'Home';
+    return {
+      ...formatted,
+      icon: isWork ? Briefcase : (isHome ? HomeIcon : MapPin),
+      cityState: [formatted.city, formatted.state, formatted.pincode].filter(Boolean).join(', '),
+      mobile: formatted.phone,
+      color: isWork ? 'slate' : (isHome ? 'blue' : 'amber'),
+    };
+  };
 
-  const [addresses, setAddresses] = useState(initialAddresses);
+  const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const fetchAddresses = async () => {
     try {
       setLoading(true);
-      const userEmail = currentUser?.email || 'customer@toyculture.com';
-      const res = await fetch('/api/account/address', {
-        headers: { 'x-user-email': userEmail }
-      });
-      const json = await res.json();
-      if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
-        const mapped = json.data.map((addr) => {
-          const isWork = (addr.address_type || '').toUpperCase() === 'WORK';
-          const isHome = (addr.address_type || '').toUpperCase() === 'HOME';
-          const typeName = isWork ? 'Office' : (isHome ? 'Home' : 'Other');
-          return {
-            id: addr.id,
-            type: typeName,
-            icon: isWork ? Briefcase : (isHome ? HomeIcon : MapPin),
-            isDefault: Boolean(addr.is_primary),
-            name: `${addr.first_name || ''} ${addr.last_name || ''}`.trim() || displayName,
-            line1: addr.address || '',
-            line2: addr.landmark || addr.place || '',
-            cityState: `${addr.place || ''}, ${addr.state || 'Kerala'} ${addr.pincode || ''}`,
-            pincode: addr.pincode || '',
-            mobile: addr.phone || '+91 98765 43210',
-            color: isWork ? 'slate' : (isHome ? 'blue' : 'amber'),
-          };
-        });
-        setAddresses(mapped);
-      }
+      const json = await api.get('/api/account/address');
+      const mapped = extractList(json).map(mapUiAddress).filter(Boolean);
+      setAddresses(mapped);
     } catch (err) {
       console.error('Failed to fetch addresses:', err);
+      setAddresses([]);
     } finally {
       setLoading(false);
     }
@@ -140,7 +84,7 @@ export default function MyAddresses() {
   const [editingAddressId, setEditingAddressId] = useState(null);
   const [addressType, setAddressType] = useState('Home');
   const [fullName, setFullName] = useState(displayName);
-  const [mobileNumber, setMobileNumber] = useState('+91 98765 43210');
+  const [mobileNumber, setMobileNumber] = useState(currentUser?.phone || '');
   const [addressLine1, setAddressLine1] = useState('');
   const [addressLine2, setAddressLine2] = useState('');
   const [pincode, setPincode] = useState('');
@@ -156,11 +100,7 @@ export default function MyAddresses() {
       }))
     );
     try {
-      const userEmail = currentUser?.email || 'customer@toyculture.com';
-      await fetch(`/api/account/address/set-as-primary/${id}`, {
-        method: 'PATCH',
-        headers: { 'x-user-email': userEmail }
-      });
+      await api.patch(`/api/account/address/set-as-primary/${id}`);
     } catch (err) {
       console.error('Failed to set primary address:', err);
     }
@@ -170,11 +110,7 @@ export default function MyAddresses() {
     if (window.confirm('Are you sure you want to delete this address?')) {
       setAddresses(addresses.filter((a) => a.id !== id));
       try {
-        const userEmail = currentUser?.email || 'customer@toyculture.com';
-        await fetch(`/api/account/address/${id}`, {
-          method: 'DELETE',
-          headers: { 'x-user-email': userEmail }
-        });
+        await api.delete(`/api/account/address/${id}`);
       } catch (err) {
         console.error('Failed to delete address:', err);
       }
@@ -185,7 +121,7 @@ export default function MyAddresses() {
     setEditingAddressId(null);
     setAddressType('Home');
     setFullName(displayName);
-    setMobileNumber('+91 98765 43210');
+    setMobileNumber(currentUser?.phone || '');
     setAddressLine1('');
     setAddressLine2('');
     setPincode('');
@@ -213,63 +149,47 @@ export default function MyAddresses() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSaveAddress = (e) => {
+  const handleSaveAddress = async (e) => {
     e.preventDefault();
     if (!addressLine1 || !city || !pincode) {
       alert('Please fill out the required address fields.');
       return;
     }
 
-    if (editingAddressId) {
-      setAddresses(
-        addresses.map((a) => {
-          if (a.id === editingAddressId) {
-            return {
-              ...a,
-              type: addressType,
-              icon: addressType === 'Home' ? HomeIcon : addressType === 'Office' ? Briefcase : MapPin,
-              name: fullName || displayName,
-              line1: addressLine1,
-              line2: addressLine2,
-              cityState: `${city}, ${state || 'Kerala'} ${pincode}`,
-              pincode: pincode,
-              mobile: mobileNumber,
-            };
-          }
-          return isDefault ? { ...a, isDefault: false } : a;
-        })
-      );
-    } else {
-      const newAddr = {
-        id: `addr-${Date.now()}`,
-        type: addressType,
-        icon: addressType === 'Home' ? HomeIcon : addressType === 'Office' ? Briefcase : MapPin,
-        isDefault: isDefault || addresses.length === 0,
-        name: fullName || displayName,
-        line1: addressLine1,
-        line2: addressLine2,
-        cityState: `${city}, ${state || 'Kerala'} ${pincode}`,
-        pincode: pincode,
-        mobile: mobileNumber,
-        color: addressType === 'Home' ? 'blue' : addressType === 'Office' ? 'slate' : 'amber'
-      };
+    const parts = String(fullName || displayName).trim().split(/\s+/);
+    const first_name = parts[0] || 'Customer';
+    const last_name = parts.slice(1).join(' ') || 'User';
+    const payload = {
+      first_name,
+      last_name,
+      phone: digitsOnly(mobileNumber),
+      address: addressLine1,
+      landmark: addressLine2 || '',
+      place: city,
+      state: state || 'Kerala',
+      pincode,
+      address_type: addressType === 'Office' ? 'WORK' : addressType === 'Home' ? 'HOME' : 'OTHER',
+      is_primary: isDefault || addresses.length === 0,
+    };
 
-      if (newAddr.isDefault) {
-        setAddresses([...addresses.map((a) => ({ ...a, isDefault: false })), newAddr]);
+    try {
+      if (editingAddressId) {
+        await api.put(`/api/account/address/${editingAddressId}`, payload);
       } else {
-        setAddresses([...addresses, newAddr]);
+        await api.post('/api/account/address', payload);
       }
+      await fetchAddresses();
+      setAddressLine1('');
+      setAddressLine2('');
+      setPincode('');
+      setCity('');
+      setState('');
+      setIsDefault(false);
+      setShowMobileModal(false);
+      setEditingAddressId(null);
+    } catch (err) {
+      alert(err.message || 'Could not save address');
     }
-
-    // Reset form
-    setAddressLine1('');
-    setAddressLine2('');
-    setPincode('');
-    setCity('');
-    setState('');
-    setIsDefault(false);
-    setShowMobileModal(false);
-    setEditingAddressId(null);
   };
 
   const handleLogout = () => {
@@ -415,6 +335,12 @@ export default function MyAddresses() {
 
             {/* Address Cards List: Stacked on mobile exactly matching mobile phone screenshot */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
+              {!loading && addresses.length === 0 && (
+                <div className="col-span-full bg-white rounded-3xl p-8 border border-slate-100 text-center">
+                  <p className="font-black text-slate-800">No saved addresses</p>
+                  <p className="text-xs text-slate-500 mt-1">Add an address to use at checkout.</p>
+                </div>
+              )}
               {addresses.map((addr) => {
                 const Icon = addr.icon;
                 const isHome = addr.type === 'Home';

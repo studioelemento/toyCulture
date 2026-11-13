@@ -2,6 +2,8 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Trash2, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { requireLoginForPurchase } from '../../lib/requireLoginAction';
 
 export const CartDrawer = () => {
   const {
@@ -12,8 +14,25 @@ export const CartDrawer = () => {
     updateQuantity,
     subtotal,
     totalItemsCount,
+    showToast,
   } = useCart();
+  const { isLoggedIn, isBootstrapping, openAuthDrawer } = useAuth();
   const navigate = useNavigate();
+
+  const goToCheckout = () => {
+    if (
+      !requireLoginForPurchase({
+        isLoggedIn,
+        isBootstrapping,
+        openAuthDrawer,
+        showToast,
+      })
+    ) {
+      return;
+    }
+    setIsCartOpen(false);
+    navigate('/checkout');
+  };
 
   if (!isCartOpen) return null;
 
@@ -86,67 +105,80 @@ export const CartDrawer = () => {
               </button>
             </div>
           ) : (
-            cart.map((item) => (
-              <div key={item.product.id} className="py-4 flex gap-4 items-center">
-                {/* Product Image */}
-                <Link
-                  to={`/product/${item.product.slug}`}
-                  onClick={() => setIsCartOpen(false)}
-                  className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"
-                >
-                  <img
-                    src={item.product.images[0]}
-                    alt={item.product.name}
-                    className="w-full h-full object-contain"
-                  />
-                </Link>
+            cart.map((item, index) => {
+              const product = item?.product || item || {};
+              const productId = product.id || product.slug || index;
+              const productName = product.name || 'Toy Product';
+              const productPrice = Number(product.sellingPrice ?? product.price ?? 0);
+              const productImage = (Array.isArray(product.images) && product.images[0]) || product.image || 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600';
+              const productPath = `/product/${product.id || product.slug}`;
 
-                {/* Info & Quantity controls */}
-                <div className="flex-1">
+              return (
+                <div key={productId} className="py-4 flex gap-4 items-center">
+                  {/* Product Image */}
                   <Link
-                    to={`/product/${item.product.slug}`}
+                    to={productPath}
                     onClick={() => setIsCartOpen(false)}
-                    className="text-xs font-bold text-toyText-heading hover:text-toyOrange transition-colors line-clamp-2 leading-tight mb-1"
+                    className="w-16 h-16 bg-gray-50 border border-gray-100 rounded-lg p-1 flex-shrink-0 flex items-center justify-center"
                   >
-                    {item.product.name}
+                    <img
+                      src={productImage}
+                      alt={productName}
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600';
+                      }}
+                    />
                   </Link>
 
-                  <div className="text-xs font-extrabold text-toyOrange mb-2">
-                    ₹{item.product.price.toLocaleString('en-IN')}
-                  </div>
+                  {/* Info & Quantity controls */}
+                  <div className="flex-1">
+                    <Link
+                      to={productPath}
+                      onClick={() => setIsCartOpen(false)}
+                      className="text-xs font-bold text-toyText-heading hover:text-toyOrange transition-colors line-clamp-2 leading-tight mb-1"
+                    >
+                      {productName}
+                    </Link>
 
-                  <div className="flex items-center justify-between">
-                    {/* Quantity Selector */}
-                    <div className="flex items-center border border-gray-200 rounded-md bg-gray-50">
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                        className="px-2 py-0.5 text-xs font-bold text-gray-600 hover:bg-gray-200"
-                      >
-                        -
-                      </button>
-                      <span className="px-2 py-0.5 text-xs font-extrabold text-toyText-primary min-w-[1.5rem] text-center">
-                        {item.quantity}
-                      </span>
-                      <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                        className="px-2 py-0.5 text-xs font-bold text-gray-600 hover:bg-gray-200"
-                      >
-                        +
-                      </button>
+                    <div className="text-xs font-extrabold text-toyOrange mb-2">
+                      ₹{productPrice.toLocaleString('en-IN')}
                     </div>
 
-                    {/* Delete button */}
-                    <button
-                      onClick={() => removeFromCart(item.product.id)}
-                      className="text-gray-400 hover:text-toyRed transition-colors p-1"
-                      title="Remove item"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center justify-between">
+                      {/* Quantity Selector */}
+                      <div className="flex items-center border border-gray-200 rounded-md bg-gray-50">
+                        <button
+                          onClick={() => updateQuantity(productId, item.quantity - 1)}
+                          className="px-2 py-0.5 text-xs font-bold text-gray-600 hover:bg-gray-200"
+                        >
+                          -
+                        </button>
+                        <span className="px-2 py-0.5 text-xs font-extrabold text-toyText-primary min-w-[1.5rem] text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateQuantity(productId, item.quantity + 1)}
+                          className="px-2 py-0.5 text-xs font-bold text-gray-600 hover:bg-gray-200"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Delete button */}
+                      <button
+                        onClick={() => removeFromCart(productId)}
+                        className="text-gray-400 hover:text-toyRed transition-colors p-1"
+                        title="Remove item"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -175,10 +207,8 @@ export const CartDrawer = () => {
                 View Cart
               </button>
               <button
-                onClick={() => {
-                  setIsCartOpen(false);
-                  navigate('/checkout');
-                }}
+                type="button"
+                onClick={goToCheckout}
                 className="bg-toyOrange hover:bg-toyOrange-hover text-white font-bold text-xs py-3 rounded-xl transition-colors flex items-center justify-center gap-1 shadow-md"
               >
                 <span>Checkout</span>

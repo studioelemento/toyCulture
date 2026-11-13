@@ -1,107 +1,194 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  fetchSession,
+  forgetPassword,
+  googleLogin,
+  login as loginApi,
+  logout as logoutApi,
+  register as registerApi,
+  resendOtp,
+  resetPassword,
+  verifyOtp,
+  OTP_TYPES,
+} from '../services/authService';
+import {
+  clearAuthStorage,
+  getAccessToken,
+  getStoredUser,
+  setAccessToken,
+  setStoredUser,
+} from '../lib/authStorage';
+import { setUnauthorizedHandler } from '../lib/apiClient';
+import { mapLegacyUser } from '../lib/userDisplay';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-const AUTH_STORAGE_KEY = 'toyculture_auth_user';
+function persistSession(token, user) {
+  setAccessToken(token || null);
+  setStoredUser(user || null);
+}
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch (e) {
-      console.error('Failed to load auth state from localStorage', e);
-      return null;
-    }
-  });
-
+  const [currentUser, setCurrentUser] = useState(() => mapLegacyUser(getStoredUser()));
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isAuthDrawerOpen, setIsAuthDrawerOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'lost-password'
+  const [authMode, setAuthMode] = useState('login');
+  const [authNotice, setAuthNotice] = useState('');
+  const [pendingEmail, setPendingEmail] = useState(null);
+
+  const applyUser = useCallback((user, token) => {
+    const mapped = mapLegacyUser(user);
+    setCurrentUser(mapped);
+    if (token) persistSession(token, mapped);
+    else if (mapped) setStoredUser(mapped);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    setCurrentUser(null);
+    clearAuthStorage();
+  }, []);
+
+  const bootstrap = useCallback(async () => {
+    if (!getAccessToken()) {
+      clearSession();
+      setIsBootstrapping(false);
+      return;
+    }
+    try {
+      const res = await fetchSession();
+      if (res?.data) {
+        applyUser(res.data, getAccessToken());
+      } else {
+        clearSession();
+      }
+    } catch {
+      clearSession();
+    } finally {
+      setIsBootstrapping(false);
+    }
+  }, [applyUser, clearSession]);
 
   useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } catch (e) {
-      console.error('Failed to save auth state to localStorage', e);
-    }
-  }, [currentUser]);
+    bootstrap();
+  }, [bootstrap]);
 
-  const openAuthDrawer = (mode = 'login') => {
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      clearSession();
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [clearSession]);
+
+  const openAuthDrawer = (mode = 'login', notice = '') => {
     setAuthMode(mode);
+    setAuthNotice(notice || '');
     setIsAuthDrawerOpen(true);
   };
 
   const closeAuthDrawer = () => {
     setIsAuthDrawerOpen(false);
+    setAuthNotice('');
   };
 
-  const login = (usernameOrEmail, password) => {
-    const user = {
-      name: usernameOrEmail.split('@')[0] || 'User',
-      email: usernameOrEmail.includes('@') ? usernameOrEmail : `${usernameOrEmail}@example.com`,
-      username: usernameOrEmail,
-    };
-    setCurrentUser(user);
+  const login = async (email, password) => {
+    const res = await loginApi(email, password);
+    applyUser(res.data, res.token);
     closeAuthDrawer();
-    return user;
+    return mapLegacyUser(res.data);
   };
 
-  const register = (username, email, password) => {
-    const user = {
-      name: username || email.split('@')[0] || 'User',
-      email: email,
-      username: username || email,
-    };
-    setCurrentUser(user);
+  const loginWithGoogle = async (code) => {
+    const res = await googleLogin(code);
+    applyUser(res.data, res.token);
     closeAuthDrawer();
-    return user;
+    return mapLegacyUser(res.data);
   };
 
-  const googleLogin = () => {
-    const user = {
-      name: 'Google User',
-      email: 'user@gmail.com',
-      username: 'google_user',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-    };
-    setCurrentUser(user);
+  const register = async (payload) => {
+    const res = await registerApi({ ...payload, email: payload.email?.trim().toLowerCase() });
+    setPendingEmail(payload.email?.trim().toLowerCase());
+    setAuthMode('verify-otp');
+    return res;
+  };
+
+  const verifyRegistrationOtp = async (otp_code) => {
+    if (!pendingEmail) throw new Error('No pending registration email');
+    const res = await verifyOtp(pendingEmail, otp_code, OTP_TYPES.SIGN_UP);
+    applyUser(res.data, res.token);
+    setPendingEmail(null);
     closeAuthDrawer();
-    return user;
+    return mapLegacyUser(res.data);
   };
 
-  const logout = () => {
-    setCurrentUser(null);
+  const requestPasswordReset = async (email) => {
+    const normalized = email.trim().toLowerCase();
+    await forgetPassword(normalized);
+    setPendingEmail(normalized);
+    setAuthMode('reset-otp');
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        currentUser,
-        isLoggedIn: !!currentUser,
-        isAuthDrawerOpen,
-        authMode,
-        setAuthMode,
-        openAuthDrawer,
-        closeAuthDrawer,
-        login,
-        register,
-        googleLogin,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const completePasswordReset = async ({ otp_code, password, confirm_password }) => {
+    if (!pendingEmail) throw new Error('No pending email for reset');
+    await verifyOtp(pendingEmail, otp_code, OTP_TYPES.FORGET_PASSWORD);
+    await resetPassword(pendingEmail, password, confirm_password);
+    setPendingEmail(null);
+    setAuthMode('login');
+  };
+
+  const resendVerificationOtp = async (type = OTP_TYPES.SIGN_UP) => {
+    if (!pendingEmail) throw new Error('No pending email');
+    return resendOtp(pendingEmail, type);
+  };
+
+  const logout = async () => {
+    try {
+      await logoutApi();
+    } catch {
+      /* still clear locally */
+    }
+    clearSession();
+  };
+
+  const value = useMemo(
+    () => ({
+      currentUser,
+      isLoggedIn: Boolean(currentUser),
+      isBootstrapping,
+      isAuthDrawerOpen,
+      authMode,
+      setAuthMode,
+      authNotice,
+      pendingEmail,
+      openAuthDrawer,
+      closeAuthDrawer,
+      login,
+      loginWithGoogle,
+      register,
+      verifyRegistrationOtp,
+      requestPasswordReset,
+      completePasswordReset,
+      resendVerificationOtp,
+      logout,
+      refreshSession: bootstrap,
+    }),
+    [
+      currentUser,
+      isBootstrapping,
+      isAuthDrawerOpen,
+      authMode,
+      authNotice,
+      pendingEmail,
+      applyUser,
+      bootstrap,
+      clearSession,
+    ]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 };

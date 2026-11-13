@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Tags, Package, ArrowRight, Layers, Award } from "lucide-react";
+import { api } from "../lib/apiClient";
 
 export default function Catalog() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/v1/products")
-      .then((res) => res.json())
+    api
+      .get("/api/v1/products")
       .then((data) => {
-        if (data.success && Array.isArray(data.data)) {
-          setProducts(data.data);
-        }
+        if (data.success && Array.isArray(data.data)) setProducts(data.data);
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));

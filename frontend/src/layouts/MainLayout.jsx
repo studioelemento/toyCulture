@@ -18,7 +18,7 @@ export const MainLayout = () => {
     <div className="min-h-screen flex flex-col bg-toyBg text-toyText-primary font-sans relative">
       {/* Toast Notification Popup */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-toyNavy text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-toyOrange/40 animate-slideUp">
+        <div className="fixed bottom-6 left-6 right-6 sm:left-auto sm:right-6 sm:max-w-md z-[100] bg-toyNavy text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-toyOrange/40 animate-slideUp pointer-events-none">
           <CheckCircle size={18} className="text-toyGreen flex-shrink-0" />
           <span className="text-xs font-bold">{toastMessage}</span>
         </div>

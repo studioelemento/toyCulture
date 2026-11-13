@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Filter,
 } from "lucide-react";
+import { api } from "../lib/apiClient";
 
 export default function ProductList() {
   const [products, setProducts] = useState([]);
@@ -25,8 +26,7 @@ export default function ProductList() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/v1/products");
-      const data = await res.json();
+      const data = await api.get("/api/v1/products");
       if (data.success && Array.isArray(data.data)) {
         setProducts(data.data);
       }
@@ -41,14 +41,8 @@ export default function ProductList() {
     if (!window.confirm(`Are you sure you want to delete "${name}" from PostgreSQL database?`)) return;
 
     try {
-      const res = await fetch(`/api/v1/products/${id}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== id));
-      } else {
-        alert("Failed to delete product.");
-      }
+      await api.delete(`/api/v1/products/${id}`);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       alert("Error: " + err.message);
     }

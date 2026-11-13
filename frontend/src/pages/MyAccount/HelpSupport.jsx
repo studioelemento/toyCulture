@@ -21,6 +21,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { accountIdentity } from '../../lib/accountHelpers';
 
 export default function HelpSupport() {
   const { currentUser, logout } = useAuth();
@@ -30,14 +31,7 @@ export default function HelpSupport() {
     window.scrollTo(0, 0);
   }, []);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
   const navItems = [

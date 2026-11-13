@@ -145,10 +145,33 @@ export const getProductById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        const product = await prisma.product.findUnique({
-            where:   { id },
-            include: STOREFRONT_INCLUDES,
-        });
+        let product = null;
+
+        // Try exact ID lookup first
+        try {
+            product = await prisma.product.findUnique({
+                where:   { id },
+                include: STOREFRONT_INCLUDES,
+            });
+        } catch {
+            product = null;
+        }
+
+        // If not found by ID, try searching by slug / name
+        if (!product) {
+            const cleanWords = id.replace(/-/g, " ").trim();
+            product = await prisma.product.findFirst({
+                where: {
+                    is_active: true,
+                    deletedAt: null,
+                    OR: [
+                        { name:  { contains: cleanWords, mode: "insensitive" } },
+                        { title: { contains: cleanWords, mode: "insensitive" } },
+                    ],
+                },
+                include: STOREFRONT_INCLUDES,
+            });
+        }
 
         if (!product) {
             return res.status(404).json({

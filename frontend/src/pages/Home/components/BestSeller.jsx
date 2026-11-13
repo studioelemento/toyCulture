@@ -1,98 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ShoppingCart, Heart, Star, Shield, Lock, Truck, Package } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
 
-export const bestSellersData = [
-  {
-    id: 'bestseller-1',
-    name: 'Lamborghini Huracán 1:18 Diecast Model',
-    slug: 'lamborghini-huracan-1-18-diecast-model',
-    brand: 'Maisto',
-    price: 2399,
-    originalPrice: 2999,
-    discount: '-20%',
-    rating: 4.8,
-    reviewsCount: 124,
-    image: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/12/4.png',
-    inStock: true,
-  },
-  {
-    id: 'bestseller-2',
-    name: 'Magnetic Building Tiles 100 Pieces',
-    slug: 'magnetic-building-tiles-100-pieces',
-    brand: 'ToysBox',
-    price: 1699,
-    originalPrice: null,
-    discount: null,
-    rating: 4.7,
-    reviewsCount: 89,
-    image: 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp',
-    inStock: true,
-  },
-  {
-    id: 'bestseller-3',
-    name: 'DIY Solar Powered Car',
-    slug: 'diy-solar-powered-car',
-    brand: 'Smartivity',
-    price: 899,
-    originalPrice: 1099,
-    discount: '-15%',
-    rating: 4.6,
-    reviewsCount: 56,
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp',
-    inStock: true,
-  },
-  {
-    id: 'bestseller-4',
-    name: 'Wooden Kitchen Set for Kids',
-    slug: 'wooden-kitchen-set-for-kids',
-    brand: 'Kruzzel',
-    price: 3499,
-    originalPrice: null,
-    discount: null,
-    rating: 4.8,
-    reviewsCount: 73,
-    image: 'https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
-    inStock: true,
-  },
-  {
-    id: 'bestseller-5',
-    name: 'T-Rex Dinosaur Figure',
-    slug: 't-rex-dinosaur-figure',
-    brand: 'Schleich',
-    price: 1299,
-    originalPrice: null,
-    discount: null,
-    rating: 4.7,
-    reviewsCount: 92,
-    image: 'https://images.unsplash.com/photo-1570481662006-a3a1374699e8?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif',
-    inStock: true,
-  },
-  {
-    id: 'bestseller-6',
-    name: 'Teddy Bear Soft Toy',
-    slug: 'teddy-bear-soft-toy',
-    brand: 'Funskool',
-    price: 999,
-    originalPrice: null,
-    discount: null,
-    rating: 4.8,
-    reviewsCount: 101,
-    image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
-    inStock: true,
-  },
-];
-
 export const BestSeller = () => {
   const { addToCart } = useCart();
   const [wishlist, setWishlist] = useState({});
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/v1/products?limit=6&sort=createdAt&order=desc')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const formatted = data.data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            slug: p.id,
+            brand: p.brand || 'ToyCulture',
+            price: p.price,
+            originalPrice: p.originalPrice || null,
+            discount: p.discount || null,
+            rating: p.rating || 4.8,
+            reviewsCount: p.reviews || 0,
+            image: p.image,
+            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
+            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
+          }));
+          setProducts(formatted);
+        }
+      })
+      .catch((err) => console.error('Error fetching best sellers:', err))
+      .finally(() => setLoading(false));
+  }, []);
 
   const toggleWishlist = (id, e) => {
     e.preventDefault();
@@ -116,7 +57,7 @@ export const BestSeller = () => {
           </div>
 
           <Link
-            to="/shop-by-category"
+            to="/shop"
             className="text-xs sm:text-sm md:text-[15px] font-bold text-[#F96515] hover:text-[#EA580C] transition-colors flex items-center gap-1 sm:gap-1.5 flex-shrink-0 cursor-pointer pb-1"
           >
             <span>View All</span>
@@ -124,211 +65,224 @@ export const BestSeller = () => {
           </Link>
         </div>
 
-        {/* Desktop Layout (1440px) - 5 Product Cards Grid */}
-        <div className="hidden md:grid grid-cols-5 gap-4 lg:gap-5 mb-10">
-          {bestSellersData.slice(0, 5).map((product) => {
-            const isFav = !!wishlist[product.id];
+        {/* Loading state */}
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <div key={n} className="bg-white rounded-[24px] border border-[#ECEFF2] p-4 h-80 animate-pulse" />
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 text-sm mb-10">
+            No products available at the moment.
+          </div>
+        ) : (
+          <>
+            {/* Desktop Layout (1440px) - Up to 5 Product Cards Grid */}
+            <div className="hidden md:grid grid-cols-5 gap-4 lg:gap-5 mb-10">
+              {products.slice(0, 5).map((product) => {
+                const isFav = !!wishlist[product.id];
 
-            return (
-              <div
-                key={product.id}
-                className="bg-white rounded-[24px] border border-[#ECEFF2] p-4 flex flex-col justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-lg transition-all duration-300 relative group"
-              >
-                {/* Top: Discount Badge & Wishlist Button */}
-                <div className="flex items-center justify-between w-full mb-2">
-                  {product.discount ? (
-                    <span className="bg-[#F96515] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
-                      {product.discount}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-
-                  <button
-                    onClick={(e) => toggleWishlist(product.id, e)}
-                    aria-label="Add to wishlist"
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors ml-auto cursor-pointer"
+                return (
+                  <div
+                    key={product.id}
+                    className="bg-white rounded-[24px] border border-[#ECEFF2] p-4 flex flex-col justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-lg transition-all duration-300 relative group"
                   >
-                    <Heart
-                      className={`w-4 h-4 transition-transform active:scale-125 ${
-                        isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 stroke-[2]'
-                      }`}
-                    />
-                  </button>
-                </div>
+                    {/* Top: Discount Badge & Wishlist Button */}
+                    <div className="flex items-center justify-between w-full mb-2">
+                      {product.discount ? (
+                        <span className="bg-[#F96515] text-white text-[11px] font-extrabold px-2.5 py-0.5 rounded-full shadow-xs">
+                          {product.discount}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
 
-                {/* Product Image */}
-                <Link
-                  to={`/product/${product.slug}`}
-                  className="w-full aspect-[4/3] rounded-xl overflow-hidden mb-3 flex items-center justify-center bg-[#FAF9F5] p-2 cursor-pointer"
-                >
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
-                    onError={(e) => {
-                      if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
-                    }}
-                  />
-                </Link>
-
-                {/* Details */}
-                <div className="space-y-2 flex-grow flex flex-col justify-between">
-                  <div>
-                    <span className="text-[11px] font-semibold text-[#8C98A9] block uppercase tracking-wider">
-                      {product.brand}
-                    </span>
-
-                    <Link
-                      to={`/product/${product.slug}`}
-                      className="text-[13px] lg:text-[14px] font-bold text-[#0F243E] hover:text-[#F96515] transition-colors line-clamp-2 leading-snug mt-0.5 font-sans cursor-pointer"
-                    >
-                      {product.name}
-                    </Link>
-                  </div>
-
-                  {/* Rating */}
-                  <div className="flex items-center gap-1.5 pt-0.5">
-                    <div className="flex items-center text-[#F59E0B]">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3.5 h-3.5 fill-[#F59E0B]" strokeWidth={0} />
-                      ))}
+                      <button
+                        onClick={(e) => toggleWishlist(product.id, e)}
+                        aria-label="Add to wishlist"
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors ml-auto cursor-pointer"
+                      >
+                        <Heart
+                          className={`w-4 h-4 transition-transform active:scale-125 ${
+                            isFav ? 'fill-red-500 text-red-500' : 'text-gray-400 stroke-[2]'
+                          }`}
+                        />
+                      </button>
                     </div>
-                    <span className="text-[11px] font-bold text-[#55657E]">
-                      {product.rating} ({product.reviewsCount})
-                    </span>
-                  </div>
 
-                  {/* Price */}
-                  <div className="flex items-baseline gap-2 pt-0.5">
-                    <span className="text-base lg:text-lg font-black text-[#0F243E]">
-                      ₹{product.price.toLocaleString('en-IN')}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-xs text-[#94A3B8] line-through font-medium">
-                        ₹{product.originalPrice.toLocaleString('en-IN')}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Add to Cart */}
-                  <button
-                    onClick={() => addToCart(product)}
-                    className="w-full mt-2 py-2.5 bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(249,101,21,0.2)] transition-all cursor-pointer"
-                  >
-                    <ShoppingCart className="w-4 h-4" strokeWidth={2.2} />
-                    <span>Add to Cart</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Mobile Layout (375px) - 2 Columns x 3 Rows Grid matching reference */}
-        <div className="grid grid-cols-2 gap-3 md:hidden mb-8">
-          {bestSellersData.map((product) => {
-            const isFav = !!wishlist[product.id];
-
-            return (
-              <div
-                key={product.id}
-                className="bg-white rounded-2xl border border-[#ECEFF2] p-2.5 shadow-xs flex flex-col justify-between relative group"
-              >
-                {/* Discount & Wishlist */}
-                <div className="flex items-center justify-between w-full mb-1">
-                  {product.discount ? (
-                    <span className="bg-[#F96515] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
-                      {product.discount}
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-
-                  <button
-                    onClick={(e) => toggleWishlist(product.id, e)}
-                    aria-label="Add to wishlist"
-                    className="p-0.5 text-gray-400 hover:text-red-500 ml-auto"
-                  >
-                    <Heart
-                      className={`w-3.5 h-3.5 ${
-                        isFav ? 'fill-red-500 text-red-500' : 'text-gray-400'
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Product Image */}
-                <Link
-                  to={`/product/${product.slug}`}
-                  className="w-full aspect-square rounded-xl bg-[#FAF9F5] p-1.5 mb-2 flex items-center justify-center overflow-hidden"
-                >
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-full h-full object-contain mix-blend-multiply"
-                    onError={(e) => {
-                      if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
-                    }}
-                  />
-                </Link>
-
-                {/* Details */}
-                <div className="space-y-1 flex-grow flex flex-col justify-between">
-                  <div>
-                    <span className="text-[9px] font-semibold text-[#8C98A9] uppercase tracking-wider block">
-                      {product.brand}
-                    </span>
+                    {/* Product Image */}
                     <Link
-                      to={`/product/${product.slug}`}
-                      className="text-xs font-bold text-[#0F243E] line-clamp-2 leading-tight"
+                      to={`/product/${product.id}`}
+                      className="w-full aspect-[4/3] rounded-xl overflow-hidden mb-3 flex items-center justify-center bg-[#FAF9F5] p-2 cursor-pointer"
                     >
-                      {product.name}
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
+                        }}
+                      />
                     </Link>
-                  </div>
 
-                  {/* Rating */}
-                  <div className="flex items-center gap-1 my-0.5">
-                    <div className="flex items-center text-[#F59E0B]">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-2.5 h-2.5 fill-[#F59E0B]" strokeWidth={0} />
-                      ))}
+                    {/* Details */}
+                    <div className="space-y-2 flex-grow flex flex-col justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#8C98A9] block uppercase tracking-wider">
+                          {product.brand}
+                        </span>
+
+                        <Link
+                          to={`/product/${product.id}`}
+                          className="text-[13px] lg:text-[14px] font-bold text-[#0F243E] hover:text-[#F96515] transition-colors line-clamp-2 leading-snug mt-0.5 font-sans cursor-pointer"
+                        >
+                          {product.name}
+                        </Link>
+                      </div>
+
+                      {/* Rating */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <div className="flex items-center text-[#F59E0B]">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className="w-3.5 h-3.5 fill-[#F59E0B]" strokeWidth={0} />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-[#55657E]">
+                          {product.rating} ({product.reviewsCount})
+                        </span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex items-baseline gap-2 pt-0.5">
+                        <span className="text-base lg:text-lg font-black text-[#0F243E]">
+                          ₹{Number(product.price).toLocaleString('en-IN')}
+                        </span>
+                        {product.originalPrice && (
+                          <span className="text-xs text-[#94A3B8] line-through font-medium">
+                            ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Add to Cart */}
+                      <button
+                        onClick={() => addToCart(product)}
+                        className="w-full mt-2 py-2.5 bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-[0_2px_8px_rgba(249,101,21,0.2)] transition-all cursor-pointer"
+                      >
+                        <ShoppingCart className="w-4 h-4" strokeWidth={2.2} />
+                        <span>Add to Cart</span>
+                      </button>
                     </div>
-                    <span className="text-[10px] font-bold text-[#55657E]">
-                      {product.rating} ({product.reviewsCount})
-                    </span>
                   </div>
+                );
+              })}
+            </div>
 
-                  {/* Price */}
-                  <div className="flex items-baseline gap-1 my-0.5">
-                    <span className="text-xs font-black text-[#0F243E]">
-                      ₹{product.price.toLocaleString('en-IN')}
-                    </span>
-                    {product.originalPrice && (
-                      <span className="text-[9px] text-[#94A3B8] line-through">
-                        ₹{product.originalPrice.toLocaleString('en-IN')}
-                      </span>
-                    )}
-                  </div>
+            {/* Mobile Layout (375px) */}
+            <div className="grid grid-cols-2 gap-3 md:hidden mb-8">
+              {products.map((product) => {
+                const isFav = !!wishlist[product.id];
 
-                  {/* Add to Cart */}
-                  <button
-                    onClick={() => addToCart(product)}
-                    className="w-full mt-1.5 py-1.5 bg-[#F96515] active:scale-[0.98] text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 shadow-xs transition-colors"
+                return (
+                  <div
+                    key={product.id}
+                    className="bg-white rounded-2xl border border-[#ECEFF2] p-2.5 shadow-xs flex flex-col justify-between relative group"
                   >
-                    <ShoppingCart className="w-3 h-3" strokeWidth={2.2} />
-                    <span>Add to Cart</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                    {/* Discount & Wishlist */}
+                    <div className="flex items-center justify-between w-full mb-1">
+                      {product.discount ? (
+                        <span className="bg-[#F96515] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                          {product.discount}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+
+                      <button
+                        onClick={(e) => toggleWishlist(product.id, e)}
+                        aria-label="Add to wishlist"
+                        className="p-0.5 text-gray-400 hover:text-red-500 ml-auto"
+                      >
+                        <Heart
+                          className={`w-3.5 h-3.5 ${
+                            isFav ? 'fill-red-500 text-red-500' : 'text-gray-400'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Product Image */}
+                    <Link
+                      to={`/product/${product.id}`}
+                      className="w-full aspect-square rounded-xl bg-[#FAF9F5] p-1.5 mb-2 flex items-center justify-center overflow-hidden"
+                    >
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-contain mix-blend-multiply"
+                        onError={(e) => {
+                          if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
+                        }}
+                      />
+                    </Link>
+
+                    {/* Details */}
+                    <div className="space-y-1 flex-grow flex flex-col justify-between">
+                      <div>
+                        <span className="text-[9px] font-semibold text-[#8C98A9] uppercase tracking-wider block">
+                          {product.brand}
+                        </span>
+                        <Link
+                          to={`/product/${product.id}`}
+                          className="text-xs font-bold text-[#0F243E] line-clamp-2 leading-tight"
+                        >
+                          {product.name}
+                        </Link>
+                      </div>
+
+                      {/* Rating */}
+                      <div className="flex items-center gap-1 my-0.5">
+                        <div className="flex items-center text-[#F59E0B]">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className="w-2.5 h-2.5 fill-[#F59E0B]" strokeWidth={0} />
+                          ))}
+                        </div>
+                        <span className="text-[10px] font-bold text-[#55657E]">
+                          {product.rating} ({product.reviewsCount})
+                        </span>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex items-baseline gap-1 my-0.5">
+                        <span className="text-xs font-black text-[#0F243E]">
+                          ₹{Number(product.price).toLocaleString('en-IN')}
+                        </span>
+                        {product.originalPrice && (
+                          <span className="text-[9px] text-[#94A3B8] line-through">
+                            ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Add to Cart */}
+                      <button
+                        onClick={() => addToCart(product)}
+                        className="w-full mt-1.5 py-1.5 bg-[#F96515] active:scale-[0.98] text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1 shadow-xs transition-colors"
+                      >
+                        <ShoppingCart className="w-3 h-3" strokeWidth={2.2} />
+                        <span>Add to Cart</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* Guarantee & Trust Badges Feature Banner (Bottom) */}
         <div className="hidden md:grid grid-cols-4 gap-6 bg-[#F4F7F9]/80 border border-[#E2E8F0] rounded-[24px] p-6 lg:p-7">
-          
-          {/* Item 1 */}
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
               <Shield className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
@@ -343,7 +297,6 @@ export const BestSeller = () => {
             </div>
           </div>
 
-          {/* Item 2 */}
           <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
               <Lock className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
@@ -358,7 +311,6 @@ export const BestSeller = () => {
             </div>
           </div>
 
-          {/* Item 3 */}
           <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
               <Truck className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
@@ -373,7 +325,6 @@ export const BestSeller = () => {
             </div>
           </div>
 
-          {/* Item 4 */}
           <div className="flex items-center gap-4 border-l border-gray-200/80 pl-6">
             <div className="w-12 h-12 rounded-xl flex items-center justify-center text-[#0F243E]">
               <Package className="w-8 h-8 text-[#0F243E]" strokeWidth={1.8} />
@@ -387,7 +338,6 @@ export const BestSeller = () => {
               </p>
             </div>
           </div>
-
         </div>
 
       </div>

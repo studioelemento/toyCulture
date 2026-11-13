@@ -30,6 +30,7 @@ import orderManagementRouter    from "./routes/admin/order-management.routes.js"
 import stockManagementRouter    from "./routes/admin/stock-management.routes.js";
 import couponManagementRouter   from "./routes/admin/coupon-management.routes.js";
 import salesReportRouter        from "./routes/admin/salesReport.routes.js";
+import reviewManagementRouter   from "./routes/admin/review-management.routes.js";
 
 // User / customer routes
 import homeRouter     from "./routes/home.routes.js";
@@ -39,6 +40,9 @@ import checkoutRouter from "./routes/user/checkout.routes.js";
 import orderRouter    from "./routes/user/order.routes.js";
 import walletRouter   from "./routes/user/wallet.routes.js";
 import wishlistRouter from "./routes/user/wishlist.routes.js";
+import reviewRouter   from "./routes/user/review.routes.js";
+import categoryRouter from "./routes/category.routes.js";
+import brandRouter    from "./routes/brand.routes.js";
 
 // ── App setup ───────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
@@ -70,6 +74,9 @@ app.use("/api/checkout",     checkoutRouter);
 app.use("/api/order",        orderRouter);
 app.use("/api/wallet",       walletRouter);
 app.use("/api/wishlist",     wishlistRouter);
+app.use("/api/reviews",      reviewRouter);
+app.use("/api/categories",   categoryRouter);
+app.use("/api/brands",       brandRouter);
 
 // ── Admin API routes ─────────────────────────────────────────────────────────
 app.use("/api/admin/dashboard",        dashboardRouter);
@@ -81,6 +88,7 @@ app.use("/api/admin/orders",           orderManagementRouter);
 app.use("/api/admin/stock",            stockManagementRouter);
 app.use("/api/admin/coupons",          couponManagementRouter);
 app.use("/api/admin/reports",          salesReportRouter);
+app.use("/api/admin/reviews",          reviewManagementRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, _res, next) => {
@@ -103,7 +111,11 @@ app.use((error, _req, res, _next) => {
 const start = async () => {
     await connectDB();
     const server = app.listen(PORT, () => {
+        console.log(`Server listening on port ${PORT}`);
         logger.info(`Server listening on port ${PORT}`);
+    });
+    server.on("error", (err) => {
+        console.error("SERVER ERROR:", err);
     });
 
     const shutdown = async () => {

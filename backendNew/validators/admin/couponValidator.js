@@ -61,9 +61,9 @@ const couponSchema = Joi.object({
         .empty('')
    // Removes the key if null, empty string, or undefined.
          .optional()  // Ensures Joi treats it as not required
-        .pattern(/^[0-9a-fA-F]{24}$/) // Value MUST be a valid ObjectId format if present
+        .uuid({ version: ['uuidv4', 'uuidv1'] })
         .messages({
-            'string.pattern.base': 'User ID must be a valid 24-character hexadecimal ObjectId.',
+            'string.guid': 'User ID must be a valid UUID.',
         }),
     usage_limit: Joi.number()
         .integer()

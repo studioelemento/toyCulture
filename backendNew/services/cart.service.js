@@ -1,93 +1,129 @@
-import mongoose from "mongoose";
-import { Cart } from "../models/cart.model.js";
-import { ProductVariant } from "../models/product_variants.model.js";
-import { User } from "../models/user.model.js";
-import { Wishlist } from "../models/wishlist.model.js";
+import { prisma } from "../config/prisma.js";
+import ErrorWithStatus from "../config/ErrorWithStatus.js";
+import { HTTP_RES } from "../utils/CONSTANTS.js";
 
-export const updateCartService = async (
-    currentUser,
-    { variant_id, quantity }
-) => {
-    console.log(quantity , variant_id , 123)
-    const variant = await ProductVariant.findOne({ _id: variant_id }).populate({
-        path: "product_id",
-        populate: { path: "category_id", model: "Category" },
+async function getOrCreateCart(userId) {
+  let cart = await prisma.cart.findUnique({ where: { user_id: userId } });
+  if (!cart) {
+    cart = await prisma.cart.create({ data: { user_id: userId } });
+  }
+  return cart;
+}
+
+export const updateCartService = async (currentUser, { variant_id, product_id, quantity }) => {
+  const user = await prisma.user.findUnique({ where: { email: currentUser } });
+  if (!user) throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
+
+  let variant = null;
+  let product = null;
+
+  if (variant_id) {
+    variant = await prisma.productVariant.findFirst({
+      where: { id: variant_id, deletedAt: null, is_active: true },
+      include: {
+        product: {
+          include: { category: true },
+        },
+      },
     });
-
-    if (
-        !variant||
-        !variant.product_id.is_active ||
-        !variant.product_id.category_id.is_active
-    ) {
-        throw new Error("Invalid request");
+    if (!variant?.product || !variant.product.is_active || variant.product.deletedAt) {
+      throw new ErrorWithStatus("Invalid request", HTTP_RES.BAD_REQUEST);
     }
-
-
-    const user = await User.findOne({ email: currentUser });
-
-    const existingVariantInCart = await Cart.findOne({
-        user_id: user._id,
-        variant_id: variant_id,
-    }).populate({
-        path : "variant_id"
+    if (variant.product.category && !variant.product.category.is_active) {
+      throw new ErrorWithStatus("Invalid request", HTTP_RES.BAD_REQUEST);
+    }
+    product = variant.product;
+  } else if (product_id) {
+    product = await prisma.product.findFirst({
+      where: { id: product_id, deletedAt: null, is_active: true },
+      include: { category: true },
     });
-
-    if (!existingVariantInCart && quantity > 0 ) {
-        console.log(variant.stock , quantity , variant.stock >= quantity)
-        if(variant.stock < quantity) throw new Error("Insufficient Quanitty")
-        console.log(variant?.product_id._id);
-        const wishlist = await Wishlist.findOneAndDelete({product_id : variant?.product_id?._id , user_id : user._id},)
-        console.log(wishlist,225)
-        const cart = await Cart.create({
-            quantity,
-            variant_id,
-            user_id: user._id,
-        });
-        return cart;
+    if (!product) throw new ErrorWithStatus("Invalid request", HTTP_RES.BAD_REQUEST);
+    if (product.category && !product.category.is_active) {
+      throw new ErrorWithStatus("Invalid request", HTTP_RES.BAD_REQUEST);
     }
-    console.log(existingVariantInCart, 998)
-    if (variant.stock < existingVariantInCart.quantity + quantity) {
-        throw new Error("Invalid Request : Insufficient stock");
-    }
-    if(!existingVariantInCart && quantity < 0){
-        throw new Error("Invalid request")
-    }
+  } else {
+    throw new ErrorWithStatus("product_id or variant_id is required", HTTP_RES.BAD_REQUEST);
+  }
 
+  const cart = await getOrCreateCart(user.id);
+  const resolvedProductId = product.id;
+  const stock = variant ? variant.stock : product.stockQTY;
 
-    if (existingVariantInCart.quantity + quantity > 5) {
-        throw new Error("Max Items in cart");
-    }
+  const existingItem = await prisma.cartItem.findUnique({
+    where: {
+      cart_id_product_id: {
+        cart_id: cart.id,
+        product_id: resolvedProductId,
+      },
+    },
+  });
 
-    console.log(existingVariantInCart.quantity + quantity ,existingVariantInCart.quantity, quantity,885)
-    if (existingVariantInCart.quantity + quantity <= 0) {
-        await Cart.deleteOne({ _id: existingVariantInCart._id });
-        return {};
-    }else{
-        existingVariantInCart.quantity = existingVariantInCart.quantity + quantity;
-        // ! TODO : ERROR MIGHT BE HERE CHECK
-        console.log(existingVariantInCart.variant_id?.product_id,885)
-        const wishlist = await Wishlist.findOneAndDelete({product_id : existingVariantInCart.variant_id?.product_id , user_id : user._id},)
-        console.log(wishlist,787)
-        await existingVariantInCart.save();
+  // Remove from wishlist when adding to cart
+  const wishlist = await prisma.wishlist.findUnique({ where: { user_id: user.id } });
+  if (wishlist) {
+    await prisma.wishlistItem.deleteMany({
+      where: { wishlist_id: wishlist.id, product_id: resolvedProductId },
+    });
+  }
 
-    }
+  if (!existingItem) {
+    if (quantity <= 0) throw new ErrorWithStatus("Invalid request", HTTP_RES.BAD_REQUEST);
+    if (stock < quantity) throw new ErrorWithStatus("Insufficient Quantity", HTTP_RES.BAD_REQUEST);
+    if (quantity > 5) throw new ErrorWithStatus("Max Items in cart", HTTP_RES.BAD_REQUEST);
 
-    return existingVariantInCart;
+    return prisma.cartItem.create({
+      data: {
+        cart_id: cart.id,
+        product_id: resolvedProductId,
+        variant_id: variant?.id || null,
+        quantity,
+      },
+      include: {
+        product: true,
+        variant: true,
+      },
+    });
+  }
+
+  const nextQty = existingItem.quantity + quantity;
+  if (nextQty > 5) throw new ErrorWithStatus("Max Items in cart", HTTP_RES.BAD_REQUEST);
+  if (nextQty > 0 && stock < nextQty) {
+    throw new ErrorWithStatus("Invalid Request : Insufficient stock", HTTP_RES.BAD_REQUEST);
+  }
+
+  if (nextQty <= 0) {
+    await prisma.cartItem.delete({ where: { id: existingItem.id } });
+    return {};
+  }
+
+  return prisma.cartItem.update({
+    where: { id: existingItem.id },
+    data: {
+      quantity: nextQty,
+      variant_id: variant?.id || existingItem.variant_id,
+    },
+    include: {
+      product: true,
+      variant: true,
+    },
+  });
 };
 
-export const removeCartService = async (
-    currentUser,
-    cart_id
-) => {
-    if(!mongoose.Types.ObjectId.isValid(cart_id)  ) throw new Error("Cart Id is inValid")
-    const cart = await Cart.findOne({ _id: cart_id });
-    const user = await User.findOne({email :currentUser})
-    console.log(cart.user_id , user._id)
-    if(!cart.user_id.equals(user._id)){
-        throw new Error("Invalid request")
-    }
+export const removeCartService = async (currentUser, cartItemId) => {
+  if (!cartItemId) throw new ErrorWithStatus("Cart Id is invalid", HTTP_RES.BAD_REQUEST);
 
-    await Cart.findOneAndDelete({ _id : cart_id})
+  const user = await prisma.user.findUnique({ where: { email: currentUser } });
+  if (!user) throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
 
-    return cart;
+  const cart = await prisma.cart.findUnique({ where: { user_id: user.id } });
+  if (!cart) throw new ErrorWithStatus("Cart not found", HTTP_RES.NOT_FOUND);
+
+  const item = await prisma.cartItem.findFirst({
+    where: { id: cartItemId, cart_id: cart.id },
+  });
+  if (!item) throw new ErrorWithStatus("Cart item not found", HTTP_RES.NOT_FOUND);
+
+  await prisma.cartItem.delete({ where: { id: item.id } });
+  return item;
 };

@@ -1,94 +1,163 @@
-import { Product } from "../../models/product.model.js";
+import { prisma } from "../../config/prisma.js";
 import ErrorWithStatus from "../../config/ErrorWithStatus.js";
 import { HTTP_RES } from "../../utils/CONSTANTS.js";
-import { Wishlist } from "../../models/wishlist.model.js";
-import mongoose from "mongoose";
-import cloudinary from "../../utils/cloudinary.js";
+
+// Helper to get or create a user's wishlist
+const getOrCreateWishlist = async (userId) => {
+  let wishlist = await prisma.wishlist.findUnique({
+    where: { user_id: userId },
+  });
+  if (!wishlist) {
+    wishlist = await prisma.wishlist.create({
+      data: { user_id: userId },
+    });
+  }
+  return wishlist;
+};
+
 export const addWishlistController = async (req, res, next) => {
-	try {
-		const currentUser = req.user;
-		const { variant_id } = req.body;
+  try {
+    const userId = req.user?.id;
+    if (!userId) throw new ErrorWithStatus("Unauthorized", HTTP_RES.UNAUTHORIZED);
 
-		const product = await Product.findOne({ _id: variant_id }).populate({
-			path: "category_id",
-			model: "Category",
-		});
+    const productId = req.body.product_id || req.body.variant_id;
+    if (!productId) {
+      throw new ErrorWithStatus("Product ID is required", HTTP_RES.BAD_REQUEST);
+    }
 
-		console.log(product, variant_id);
-		console.log(product, product.is_active, product.category_id.is_active);
-		if (!product || !product.is_active || !product.category_id.is_active) {
-			throw new ErrorWithStatus("Invalid Requrest", HTTP_RES.BAD_REQUEST);
-		}
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+    if (!product || !product.is_active) {
+      throw new ErrorWithStatus("Product not found or inactive", HTTP_RES.BAD_REQUEST);
+    }
 
-		const existingVariantInWishlist = await Wishlist.findOne({ user_id: currentUser._id, product_id: variant_id });
-        console.log(Boolean(existingVariantInWishlist),885)
-		if (existingVariantInWishlist) {
-			await Wishlist.findByIdAndDelete(existingVariantInWishlist._id);
-            return res.status(HTTP_RES.ACCEPTED).json({ message: "Wishlist removed", status: "success",  });
-		} else {
-			const wishlist = await Wishlist.create({
-				product_id: variant_id,
-				user_id: currentUser._id,
-			});
+    const wishlist = await getOrCreateWishlist(userId);
 
-			return res.status(HTTP_RES.CREATED).json({ message: "Wishlist added", status: "success", data: wishlist });
-		}
-	} catch (error) {
-		next(error);
-	}
+    // Toggle logic: If already in wishlist, remove it; otherwise add it
+    const existing = await prisma.wishlistItem.findUnique({
+      where: {
+        wishlist_id_product_id: {
+          wishlist_id: wishlist.id,
+          product_id: productId,
+        },
+      },
+    });
+
+    if (existing) {
+      await prisma.wishlistItem.delete({
+        where: { id: existing.id },
+      });
+      return res.status(HTTP_RES.OK).json({
+        success: true,
+        message: "Removed from wishlist",
+        wishlisted: false,
+      });
+    } else {
+      const item = await prisma.wishlistItem.create({
+        data: {
+          wishlist_id: wishlist.id,
+          product_id: productId,
+        },
+      });
+      return res.status(HTTP_RES.CREATED).json({
+        success: true,
+        message: "Added to wishlist",
+        wishlisted: true,
+        data: item,
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const removeWishlistController = async (req, res, next) => {
-	try {
-		const currentUser = req.user;
-		const { id } = req.params;
+  try {
+    const userId = req.user?.id;
+    if (!userId) throw new ErrorWithStatus("Unauthorized", HTTP_RES.UNAUTHORIZED);
 
-		if (!mongoose.Types.ObjectId.isValid(id)) throw new ErrorWithStatus("Cart Id is invlaid", HTTP_RES.BAD_REQUEST);
+    const { id } = req.params; // this can be WishlistItem id OR product_id
+    const wishlist = await prisma.wishlist.findUnique({
+      where: { user_id: userId },
+    });
 
-		const wishlist = await Wishlist.findOne({ _id: id });
-		if (!wishlist.user_id.equals(currentUser._id)) {
-			throw new ErrorWithStatus("Invalid Request", HTTP_RES.BAD_REQUEST);
-		}
+    if (!wishlist) {
+      return res.status(HTTP_RES.OK).json({ success: true, message: "Item removed" });
+    }
 
-		await Wishlist.findOneAndDelete({ _id: id });
-		return res.status(HTTP_RES.OK).json({ message: "Wishlist Item remvoed Successfully", status: "success" });
-	} catch (error) {
-		next(error);
-	}
+    // Try deleting by WishlistItem id or by product_id
+    await prisma.wishlistItem.deleteMany({
+      where: {
+        wishlist_id: wishlist.id,
+        OR: [{ id }, { product_id: id }],
+      },
+    });
+
+    return res.status(HTTP_RES.OK).json({
+      success: true,
+      message: "Wishlist item removed successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getAllWishlistController = async (req, res, next) => {
-	try {
-		const user = req.user;
+  try {
+    const userId = req.user?.id;
+    if (!userId) throw new ErrorWithStatus("Unauthorized", HTTP_RES.UNAUTHORIZED);
 
-		const wishlistItems = await Wishlist.find({ user_id: user._id })
-			.populate({
-				path: "product_id",
-				populate: {
-					path: "category_id",
-					select: "is_active discount",
-				},
-				select: "is_active images name price discount",
-			})
-			.lean();
-		const simplifiedWishlistItems = wishlistItems.map((x) => {
-			const product = x.product_id;
-			return {
-				_id: x._id,
-                discount : product.discount > product.category_id.discount ? product.discount : product.category_id.discount,
-				product_id: product._id,
-				name: product.name,
-				price: product.price,
-				image: cloudinary.url(product.images?.[0]?.url || null, {
-					secure: true,
-				}),
-			};
-		});
-		console.log(wishlistItems);
-		return res.status(HTTP_RES.OK).json({ data: simplifiedWishlistItems, status: "success", message: "Wishlist item receiveed successfuly" });
-	} catch (error) {
-		next(error);
-	}
+    const wishlist = await prisma.wishlist.findUnique({
+      where: { user_id: userId },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                brand: true,
+                category: true,
+                reviews: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    const items = (wishlist?.items || []).map((item) => {
+      const p = item.product;
+      const imagesArr = Array.isArray(p.images) ? p.images : [];
+      const image = imagesArr[0] || "https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600";
+      const avgRating =
+        p.reviews?.length > 0
+          ? (p.reviews.reduce((s, r) => s + (r.rating || 0), 0) / p.reviews.length).toFixed(1)
+          : 4.8;
+
+      return {
+        id: item.id,
+        itemId: item.id,
+        productId: p.id,
+        name: p.name,
+        price: p.sellingPrice ?? p.price,
+        originalPrice: p.mrp ?? p.price,
+        rating: Number(avgRating),
+        reviews: p.reviews?.length || 0,
+        inStock: (p.stockQTY ?? 0) > 0,
+        badge: (p.stockQTY ?? 0) > 0 ? "In Stock" : "Out of Stock",
+        category: p.category?.name || "Toys",
+        brand: p.brand?.name || "ToyCulture",
+        image,
+      };
+    });
+
+    return res.status(HTTP_RES.OK).json({
+      success: true,
+      data: items,
+      total: items.length,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
-
-// export const

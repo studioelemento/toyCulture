@@ -21,9 +21,11 @@ import {
   Edit2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, digitsOnly } from '../../lib/accountHelpers';
 
 export default function PersonalDetails() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, refreshSession } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,21 +33,26 @@ export default function PersonalDetails() {
   }, []);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [fullName, setFullName] = useState(currentUser?.name || 'Anand R V');
-  const [email, setEmail] = useState(currentUser?.email || 'anandrv@example.com');
-  const [mobile, setMobile] = useState('+91 98765 43210');
+  const identity = accountIdentity(currentUser);
+  const [fullName, setFullName] = useState(identity.displayName === 'Guest' ? '' : identity.displayName);
+  const [email, setEmail] = useState(currentUser?.email || '');
+  const [mobile, setMobile] = useState(currentUser?.phone || '');
 
   const [newMobile, setNewMobile] = useState('');
   const [newEmail, setNewEmail] = useState('');
 
-  const displayName = fullName || 'Anand R V';
-  const displayEmail = email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  useEffect(() => {
+    const next = accountIdentity(currentUser);
+    setFullName(next.displayName === 'Guest' ? '' : next.displayName);
+    setEmail(currentUser?.email || '');
+    setMobile(currentUser?.phone || '');
+  }, [currentUser]);
+
+  const { displayName, displayEmail, initials } = accountIdentity({
+    ...currentUser,
+    first_name: fullName,
+    email,
+  });
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -63,10 +70,23 @@ export default function PersonalDetails() {
     navigate('/');
   };
 
-  const handleSaveDetails = (e) => {
+  const handleSaveDetails = async (e) => {
     e.preventDefault();
-    setIsEditing(false);
-    alert('Personal details updated successfully!');
+    const parts = String(fullName || '').trim().split(/\s+/);
+    const first_name = parts[0] || '';
+    const last_name = parts.slice(1).join(' ') || 'User';
+    const phone = digitsOnly(mobile);
+    try {
+      const form = new FormData();
+      form.append('first_name', first_name);
+      form.append('last_name', last_name);
+      form.append('phone', phone);
+      await api.put('/api/account', form);
+      await refreshSession();
+      setIsEditing(false);
+    } catch (err) {
+      alert(err.message || 'Could not update profile');
+    }
   };
 
   const handleSendMobileOtp = (e) => {

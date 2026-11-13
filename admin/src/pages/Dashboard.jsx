@@ -13,8 +13,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-// ── API base ────────────────────────────────────────────────────────────────
-const API_BASE = "/api";
+import { api } from "../lib/apiClient";
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, icon: Icon, color, subLabel, loading }) {
@@ -50,6 +49,8 @@ function StatCard({ label, value, icon: Icon, color, subLabel, loading }) {
 export default function Dashboard() {
   const [summary,  setSummary]  = useState(null);
   const [products, setProducts] = useState([]);
+  const [recentCustomers, setRecentCustomers] = useState([]);
+  const [customerActivity, setCustomerActivity] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
 
@@ -57,20 +58,15 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [dashRes, prodRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/dashboard`),
-        fetch(`${API_BASE}/v1/products`),
+      const [dash, prod] = await Promise.all([
+        api.get("/api/admin/dashboard"),
+        api.get("/api/v1/products"),
       ]);
 
-      if (dashRes.ok) {
-        const dash = await dashRes.json();
-        setSummary(dash.data?.summary ?? null);
-      }
-
-      if (prodRes.ok) {
-        const prod = await prodRes.json();
-        if (prod.success && Array.isArray(prod.data)) setProducts(prod.data);
-      }
+      setSummary(dash.data?.summary ?? null);
+      setRecentCustomers(Array.isArray(dash.data?.recent_customers) ? dash.data.recent_customers : []);
+      setCustomerActivity(Array.isArray(dash.data?.recent_customer_activity) ? dash.data.recent_customer_activity : []);
+      if (prod.success && Array.isArray(prod.data)) setProducts(prod.data);
     } catch (err) {
       setError("Failed to load dashboard data. Check your server connection.");
       console.error("Dashboard fetch error:", err);
@@ -88,6 +84,10 @@ export default function Dashboard() {
   const totalOrders    = summary?.total_orders      ?? 0;
   const totalUsers     = summary?.total_users       ?? 0;
   const totalRevenue   = summary?.total_revenue     ?? 0;
+  const newUsersWeek   = summary?.new_users_week    ?? 0;
+  const activeCustomers = summary?.active_customers ?? 0;
+  const blockedCustomers = summary?.blocked_customers ?? 0;
+  const unverifiedCustomers = summary?.unverified_customers ?? 0;
 
   return (
     <div className="space-y-8">
@@ -124,6 +124,12 @@ export default function Dashboard() {
               <span>Add New Toy</span>
             </Link>
             <Link
+              to="/customers"
+              className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 text-white border border-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all"
+            >
+              <span>Manage Customers</span>
+            </Link>
+            <Link
               to="/products"
               className="flex items-center gap-2 bg-slate-800/80 hover:bg-slate-700/80 text-white border border-slate-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all"
             >
@@ -148,6 +154,77 @@ export default function Dashboard() {
         <StatCard label="Total Orders"    value={totalOrders}    icon={ShoppingBag} color="purple"  subLabel="All time"              loading={loading} />
         <StatCard label="Total Users"     value={totalUsers}     icon={Users}       color="blue"    subLabel="Registered customers"  loading={loading} />
         <StatCard label="Revenue (₹)"     value={`₹${totalRevenue.toLocaleString()}`} icon={DollarSign} color="rose" subLabel="Paid orders only" loading={loading} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="New this week" value={newUsersWeek} icon={Users} color="blue" subLabel="Shop signups (7 days)" loading={loading} />
+        <StatCard label="Active customers" value={activeCustomers} icon={Users} color="emerald" subLabel="Not blocked" loading={loading} />
+        <StatCard label="Blocked" value={blockedCustomers} icon={AlertTriangle} color="rose" subLabel="Cannot log in" loading={loading} />
+        <StatCard label="Unverified" value={unverifiedCustomers} icon={AlertTriangle} color="amber" subLabel="OTP pending" loading={loading} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-[#0E1526] border border-indigo-950/60 rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-indigo-950/60 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white tracking-tight">Recent customers</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Latest accounts stored in PostgreSQL</p>
+            </div>
+            <Link to="/customers" className="flex items-center gap-1.5 text-xs font-bold text-indigo-400 hover:text-indigo-300">
+              View all <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Loading customers…</div>
+          ) : recentCustomers.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">No customers yet.</div>
+          ) : (
+            <ul className="divide-y divide-indigo-950/30">
+              {recentCustomers.map((c) => (
+                <li key={c.id} className="px-5 py-3.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white truncate">
+                      {[c.first_name, c.last_name].filter(Boolean).join(" ") || c.email}
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">{c.email}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[11px] text-slate-400">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""}
+                    </div>
+                    <div className={`text-[10px] font-bold ${c.active ? "text-emerald-400" : "text-rose-400"}`}>
+                      {c.active ? (c.is_verified ? "Active" : "Unverified") : "Blocked"}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="bg-[#0E1526] border border-indigo-950/60 rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-5 border-b border-indigo-950/60">
+            <h2 className="text-lg font-bold text-white tracking-tight">Customer activity</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Signups and recent orders</p>
+          </div>
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Loading activity…</div>
+          ) : customerActivity.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-sm">No recent activity.</div>
+          ) : (
+            <ul className="divide-y divide-indigo-950/30">
+              {customerActivity.map((item, idx) => (
+                <li key={`${item.type}-${idx}`} className="px-5 py-3.5">
+                  <div className="text-sm text-slate-200">{item.label}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {item.at ? new Date(item.at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}
+                    {item.meta?.amount != null ? ` · ₹${Number(item.meta.amount).toLocaleString()}` : ""}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* ── Recent Products Table ──────────────────────────────────────────── */}

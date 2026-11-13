@@ -3,23 +3,10 @@ import { Link } from 'react-router-dom';
 import { ShoppingCart, Star, Truck, Shield, Package } from 'lucide-react';
 import { useCart } from '../../../context/CartContext';
 
-export const dealOfTheDayProduct = {
-  id: 'deal-of-the-day-lego-space',
-  name: 'City Space Base and Rocket Launch Pad',
-  slug: 'city-space-base-and-rocket-launch-pad',
-  brand: 'LEGO',
-  price: 5599,
-  originalPrice: 7999,
-  discount: '30% OFF',
-  rating: 4.8,
-  reviewsCount: 124,
-  image: 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?auto=format&fit=crop&w=800&q=80',
-  fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp',
-  inStock: true,
-};
-
 export const DealoftheDay = () => {
   const { addToCart } = useCart();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState({
     hours: 12,
     minutes: 24,
@@ -44,7 +31,46 @@ export const DealoftheDay = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Fetch deal product from database
+  useEffect(() => {
+    fetch('/api/v1/products?limit=1&sort=price&order=desc')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+          const p = data.data[0];
+          setProduct({
+            id: p.id,
+            name: p.name,
+            slug: p.id,
+            brand: p.brand || 'ToyCulture',
+            price: p.price,
+            originalPrice: p.originalPrice || (p.price * 1.25).toFixed(0),
+            discount: p.discount || '20% OFF',
+            rating: p.rating || 4.8,
+            reviewsCount: p.reviews || 0,
+            image: p.image,
+            fallbackImg: 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?auto=format&fit=crop&q=80&w=600',
+            inStock: (p.stockQTY ?? p.stock ?? 1) > 0,
+          });
+        }
+      })
+      .catch((err) => console.error('Error fetching deal of the day:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
   const formatNumber = (num) => String(num).padStart(2, '0');
+
+  if (loading) {
+    return (
+      <section className="w-full bg-[#FAF9F5] py-8 sm:py-10 md:py-14">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12">
+          <div className="bg-[#FFFDF9] border border-[#EDE7DC] rounded-[32px] p-6 sm:p-8 lg:p-12 h-96 animate-pulse" />
+        </div>
+      </section>
+    );
+  }
+
+  if (!product) return null;
 
   return (
     <section className="w-full bg-[#FAF9F5] py-8 sm:py-10 md:py-14">
@@ -73,7 +99,6 @@ export const DealoftheDay = () => {
 
               {/* Countdown Timer Boxes */}
               <div className="flex items-center gap-3">
-                {/* Hours */}
                 <div className="bg-white border border-[#E5E9EC] rounded-2xl w-20 py-3 text-center shadow-xs">
                   <span className="text-2xl font-black text-[#0F243E] block font-title">
                     {formatNumber(timeLeft.hours)}
@@ -81,7 +106,6 @@ export const DealoftheDay = () => {
                   <span className="text-[11px] text-[#7C8BA0] font-medium">Hours</span>
                 </div>
 
-                {/* Minutes */}
                 <div className="bg-white border border-[#E5E9EC] rounded-2xl w-20 py-3 text-center shadow-xs">
                   <span className="text-2xl font-black text-[#0F243E] block font-title">
                     {formatNumber(timeLeft.minutes)}
@@ -89,7 +113,6 @@ export const DealoftheDay = () => {
                   <span className="text-[11px] text-[#7C8BA0] font-medium">Mins</span>
                 </div>
 
-                {/* Seconds */}
                 <div className="bg-white border border-[#E5E9EC] rounded-2xl w-20 py-3 text-center shadow-xs">
                   <span className="text-2xl font-black text-[#0F243E] block font-title">
                     {formatNumber(timeLeft.seconds)}
@@ -100,7 +123,7 @@ export const DealoftheDay = () => {
 
               {/* Add to Cart Button */}
               <button
-                onClick={() => addToCart(dealOfTheDayProduct)}
+                onClick={() => addToCart(product)}
                 className="w-full max-w-[280px] py-3.5 bg-[#F96515] hover:bg-[#EA580C] active:scale-[0.98] text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(249,101,21,0.25)] transition-all cursor-pointer"
               >
                 <ShoppingCart className="w-4 h-4" strokeWidth={2.4} />
@@ -108,42 +131,40 @@ export const DealoftheDay = () => {
               </button>
             </div>
 
-            {/* Center Column: Product Visual with 30% OFF Circle Badge */}
+            {/* Center Column: Product Visual with Discount Circle Badge */}
             <div className="col-span-5 relative flex items-center justify-center">
-              
-              {/* Product Visual */}
               <div className="relative w-full max-w-[420px] aspect-[4/3] flex items-center justify-center">
                 <img
-                  src={dealOfTheDayProduct.image}
-                  alt={dealOfTheDayProduct.name}
+                  src={product.image}
+                  alt={product.name}
                   className="w-full h-full object-contain mix-blend-multiply drop-shadow-xl"
                   onError={(e) => {
-                    if (dealOfTheDayProduct.fallbackImg) {
-                      e.currentTarget.src = dealOfTheDayProduct.fallbackImg;
-                    }
+                    if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
                   }}
                 />
 
-                {/* 30% OFF Circular Badge */}
-                <div className="absolute top-2 right-2 sm:right-6 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#F96515] text-white flex flex-col items-center justify-center shadow-lg -rotate-6">
-                  <span className="text-base sm:text-lg font-black leading-none font-title">30%</span>
-                  <span className="text-[10px] sm:text-xs font-black tracking-wider uppercase leading-none mt-0.5">OFF</span>
-                </div>
+                {/* Circular Discount Badge */}
+                {product.discount && (
+                  <div className="absolute top-2 right-2 sm:right-6 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#F96515] text-white flex flex-col items-center justify-center shadow-lg -rotate-6">
+                    <span className="text-sm sm:text-base font-black leading-none font-title text-center px-1">
+                      {product.discount}
+                    </span>
+                  </div>
+                )}
               </div>
-
             </div>
 
             {/* Right Column: Brand, Name, Rating, Price, Guarantee Items */}
             <div className="col-span-3 space-y-4">
               <div>
                 <span className="text-xs font-bold text-[#8C98A9] uppercase tracking-wider block">
-                  {dealOfTheDayProduct.brand}
+                  {product.brand}
                 </span>
                 <Link
-                  to={`/product/${dealOfTheDayProduct.slug}`}
+                  to={`/product/${product.id}`}
                   className="text-lg lg:text-xl font-black text-[#0F243E] hover:text-[#F96515] transition-colors leading-snug font-title block mt-1"
                 >
-                  {dealOfTheDayProduct.name}
+                  {product.name}
                 </Link>
               </div>
 
@@ -155,18 +176,20 @@ export const DealoftheDay = () => {
                   ))}
                 </div>
                 <span className="text-xs font-bold text-[#55657E]">
-                  {dealOfTheDayProduct.rating} ({dealOfTheDayProduct.reviewsCount})
+                  {product.rating} ({product.reviewsCount})
                 </span>
               </div>
 
               {/* Price */}
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl lg:text-3xl font-black text-[#0F243E]">
-                  ₹{dealOfTheDayProduct.price.toLocaleString('en-IN')}
+                  ₹{Number(product.price).toLocaleString('en-IN')}
                 </span>
-                <span className="text-sm text-[#94A3B8] line-through font-medium">
-                  ₹{dealOfTheDayProduct.originalPrice.toLocaleString('en-IN')}
-                </span>
+                {product.originalPrice && (
+                  <span className="text-sm text-[#94A3B8] line-through font-medium">
+                    ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+                  </span>
+                )}
               </div>
 
               {/* 3 Guarantee Features */}
@@ -186,15 +209,12 @@ export const DealoftheDay = () => {
                   <span className="text-sm font-bold text-[#0F243E]">Easy Returns</span>
                 </div>
               </div>
-
             </div>
 
           </div>
 
-          {/* Mobile Layout (375px) matching exact vertical structure */}
+          {/* Mobile Layout (375px) */}
           <div className="flex flex-col space-y-5 lg:hidden">
-            
-            {/* Header */}
             <div>
               <span className="text-[11px] font-bold tracking-[0.2em] text-[#55657E] uppercase font-sans block mb-1">
                 DEAL OF THE DAY
@@ -211,29 +231,30 @@ export const DealoftheDay = () => {
             {/* Product Image & Badge */}
             <div className="relative w-full aspect-[4/3] flex items-center justify-center bg-[#FAF9F5] rounded-2xl p-3">
               <img
-                src={dealOfTheDayProduct.image}
-                alt={dealOfTheDayProduct.name}
+                src={product.image}
+                alt={product.name}
                 className="w-full h-full object-contain mix-blend-multiply"
                 onError={(e) => {
-                  if (dealOfTheDayProduct.fallbackImg) {
-                    e.currentTarget.src = dealOfTheDayProduct.fallbackImg;
-                  }
+                  if (product.fallbackImg) e.currentTarget.src = product.fallbackImg;
                 }}
               />
 
-              <div className="absolute top-2 right-2 w-14 h-14 rounded-full bg-[#F96515] text-white flex flex-col items-center justify-center shadow-md">
-                <span className="text-sm font-black leading-none font-title">30%</span>
-                <span className="text-[9px] font-black tracking-wider uppercase leading-none mt-0.5">OFF</span>
-              </div>
+              {product.discount && (
+                <div className="absolute top-2 right-2 w-14 h-14 rounded-full bg-[#F96515] text-white flex flex-col items-center justify-center shadow-md">
+                  <span className="text-xs font-black leading-none font-title text-center px-1">
+                    {product.discount}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Brand, Title, Rating, Price */}
             <div className="space-y-1.5">
               <span className="text-[10px] font-bold text-[#8C98A9] uppercase tracking-wider block">
-                {dealOfTheDayProduct.brand}
+                {product.brand}
               </span>
               <h3 className="text-base font-black text-[#0F243E] leading-snug font-title">
-                {dealOfTheDayProduct.name}
+                {product.name}
               </h3>
 
               <div className="flex items-center gap-1.5 py-0.5">
@@ -243,17 +264,19 @@ export const DealoftheDay = () => {
                   ))}
                 </div>
                 <span className="text-xs font-bold text-[#55657E]">
-                  {dealOfTheDayProduct.rating} ({dealOfTheDayProduct.reviewsCount})
+                  {product.rating} ({product.reviewsCount})
                 </span>
               </div>
 
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-black text-[#0F243E]">
-                  ₹{dealOfTheDayProduct.price.toLocaleString('en-IN')}
+                  ₹{Number(product.price).toLocaleString('en-IN')}
                 </span>
-                <span className="text-xs text-[#94A3B8] line-through font-medium">
-                  ₹{dealOfTheDayProduct.originalPrice.toLocaleString('en-IN')}
-                </span>
+                {product.originalPrice && (
+                  <span className="text-xs text-[#94A3B8] line-through font-medium">
+                    ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -301,13 +324,12 @@ export const DealoftheDay = () => {
 
             {/* Add to Cart */}
             <button
-              onClick={() => addToCart(dealOfTheDayProduct)}
+              onClick={() => addToCart(product)}
               className="w-full py-3 bg-[#F96515] active:scale-[0.98] text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors"
             >
               <ShoppingCart className="w-4 h-4" strokeWidth={2.4} />
               <span>Add to Cart</span>
             </button>
-
           </div>
 
         </div>

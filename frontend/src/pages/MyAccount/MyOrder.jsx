@@ -21,6 +21,8 @@ import {
   Grid
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, extractList, mapStoreOrder } from '../../lib/accountHelpers';
 
 export default function MyOrder() {
   const { currentUser, logout } = useAuth();
@@ -31,14 +33,7 @@ export default function MyOrder() {
   const [filterTime, setFilterTime] = useState('Last 6 Months');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -51,7 +46,34 @@ export default function MyOrder() {
     { id: 'support', label: 'Help & Support', icon: Headphones, path: '/account/support' },
   ];
 
-  // 4 Order Stat Summary Cards (2x2 grid on mobile)
+  const [ordersList, setOrdersList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const json = await api.get('/api/order?limit=50');
+        const rows = extractList(json);
+        if (isMounted) setOrdersList(rows.map(mapStoreOrder));
+      } catch (err) {
+        console.error('Failed to load orders from API:', err);
+        if (isMounted) setOrdersList([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchOrders();
+    return () => { isMounted = false; };
+  }, [currentUser]);
+
+  const totalOrdersCount = ordersList.length;
+  const inTransitCount = ordersList.filter((o) => ['processing', 'shipped'].includes(o.statusType)).length;
+  const deliveredCount = ordersList.filter((o) => o.statusType === 'delivered').length;
+  const cancelledCount = ordersList.filter((o) => o.statusType === 'cancelled').length;
+
   const stats = [
     {
       title: 'Total Orders',
@@ -91,207 +113,6 @@ export default function MyOrder() {
     },
   ];
 
-  // Fallback orders list for initial template preview
-  const fallbackOrders = [
-    {
-      id: 'TC10482',
-      date: '21 Oct 2026',
-      itemsCount: '2 items',
-      title: 'Lamborghini Huracán LP 610-4 + 1 more',
-      amount: '₹2,399',
-      status: 'Shipped',
-      statusType: 'shipped',
-      hasTrack: true,
-      image: '/lamborghini.jpg',
-      steps: [
-        { label: 'Ordered', date: '21 Oct', done: true },
-        { label: 'Shipped', date: '22 Oct', done: true, current: true },
-        { label: 'Out for Delivery', date: '24 Oct', done: false },
-        { label: 'Delivered', date: '-', done: false },
-      ],
-      progressWidth: '45%',
-      lineColor: 'bg-emerald-500'
-    },
-    {
-      id: 'TC10411',
-      date: '12 Oct 2026',
-      itemsCount: '1 item',
-      title: 'Building Blocks Set',
-      amount: '₹1,599',
-      status: 'Delivered',
-      statusType: 'delivered',
-      hasTrack: false,
-      image: '/lego.jpg',
-      steps: [
-        { label: 'Ordered', date: '12 Oct', done: true },
-        { label: 'Shipped', date: '13 Oct', done: true },
-        { label: 'Out for Delivery', date: '14 Oct', done: true },
-        { label: 'Delivered', date: '14 Oct', done: true },
-      ],
-      progressWidth: '100%',
-      lineColor: 'bg-blue-600'
-    },
-    {
-      id: 'TC09736',
-      date: '28 Sep 2026',
-      itemsCount: '3 items',
-      title: 'Teddy Bear + 2 more',
-      amount: '₹3,499',
-      status: 'Processing',
-      statusType: 'processing',
-      hasTrack: true,
-      image: '/teddy.jpg',
-      steps: [
-        { label: 'Ordered', date: '28 Sep', done: true, current: true },
-        { label: 'Shipped', date: '', done: false },
-        { label: 'Out for Delivery', date: '', done: false },
-        { label: 'Delivered', date: '', done: false },
-      ],
-      progressWidth: '15%',
-      lineColor: 'bg-amber-500'
-    },
-    {
-      id: 'TC09221',
-      date: '10 Sep 2026',
-      itemsCount: '1 item',
-      title: 'Wooden Train Set',
-      amount: '₹1,199',
-      status: 'Cancelled',
-      statusType: 'cancelled',
-      hasTrack: false,
-      image: '/stacker.jpg',
-      steps: [
-        { label: 'Ordered', date: '10 Sep', done: true },
-        { label: 'Cancelled', date: '12 Sep', done: true, isCancelled: true },
-      ],
-      progressWidth: '100%',
-      lineColor: 'bg-purple-400',
-      isCancelledTimeline: true
-    },
-    {
-      id: 'TC08876',
-      date: '22 Aug 2026',
-      itemsCount: '1 item',
-      title: 'Remote Control Car',
-      amount: '₹2,799',
-      status: 'Delivered',
-      statusType: 'delivered',
-      hasTrack: false,
-      image: '/nerf.jpg',
-      steps: [
-        { label: 'Ordered', date: '22 Aug', done: true },
-        { label: 'Shipped', date: '23 Aug', done: true },
-        { label: 'Out for Delivery', date: '25 Aug', done: true },
-        { label: 'Delivered', date: '25 Aug', done: true },
-      ],
-      progressWidth: '100%',
-      lineColor: 'bg-emerald-500'
-    }
-  ];
-
-  const [ordersList, setOrdersList] = useState(fallbackOrders);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    const fetchOrders = async () => {
-      try {
-        setLoading(true);
-        const userEmail = currentUser?.email || 'customer@toyculture.com';
-        const res = await fetch('/api/order', {
-          headers: { 'x-user-email': userEmail }
-        });
-        const json = await res.json();
-        if (json.status === 'success' && Array.isArray(json.data) && json.data.length > 0) {
-          const mapped = json.data.map((order) => {
-            const dateObj = new Date(order.createdAt);
-            const dateFormatted = dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-            const firstItem = order.items?.[0];
-            const extraCount = (order.items?.length || 1) - 1;
-            const title = firstItem?.product_name
-              ? `${firstItem.product_name}${extraCount > 0 ? ` + ${extraCount} more` : ''}`
-              : 'ToyCulture Order';
-            const statusUpper = (order.status || 'PLACED').toUpperCase();
-
-            let statusText = 'Placed';
-            let statusType = 'processing';
-            let lineColor = 'bg-amber-500';
-            let progressWidth = '20%';
-            let hasTrack = false;
-            let isCancelled = false;
-
-            if (statusUpper === 'CONFIRMED' || statusUpper === 'PACKED') {
-              statusText = statusUpper === 'PACKED' ? 'Packed' : 'Confirmed';
-              statusType = 'processing';
-              lineColor = 'bg-amber-500';
-              progressWidth = '45%';
-              hasTrack = true;
-            } else if (statusUpper === 'SHIPPED') {
-              statusText = 'Shipped';
-              statusType = 'shipped';
-              lineColor = 'bg-emerald-500';
-              progressWidth = '75%';
-              hasTrack = true;
-            } else if (statusUpper === 'DELIVERED') {
-              statusText = 'Delivered';
-              statusType = 'delivered';
-              lineColor = 'bg-blue-600';
-              progressWidth = '100%';
-              hasTrack = false;
-            } else if (statusUpper === 'CANCELLED' || statusUpper === 'RETURNED') {
-              statusText = statusUpper === 'CANCELLED' ? 'Cancelled' : 'Returned';
-              statusType = 'cancelled';
-              lineColor = 'bg-purple-400';
-              progressWidth = '100%';
-              hasTrack = false;
-              isCancelled = true;
-            }
-
-            const steps = isCancelled ? [
-              { label: 'Ordered', date: dateFormatted.split(' ').slice(0, 2).join(' '), done: true },
-              { label: statusText, date: 'Updated', done: true, isCancelled: true },
-            ] : [
-              { label: 'Ordered', date: dateFormatted.split(' ').slice(0, 2).join(' '), done: true },
-              { label: 'Shipped', date: ['SHIPPED', 'DELIVERED'].includes(statusUpper) ? 'Done' : '-', done: ['SHIPPED', 'DELIVERED'].includes(statusUpper), current: statusUpper === 'SHIPPED' },
-              { label: 'Out for Delivery', date: statusUpper === 'DELIVERED' ? 'Done' : '-', done: statusUpper === 'DELIVERED' },
-              { label: 'Delivered', date: statusUpper === 'DELIVERED' ? 'Done' : '-', done: statusUpper === 'DELIVERED' },
-            ];
-
-            return {
-              id: order.order_number || order.id?.slice(0, 8),
-              rawId: order.id,
-              date: dateFormatted,
-              itemsCount: `${order.items?.length || 1} item${order.items?.length === 1 ? '' : 's'}`,
-              title,
-              amount: `₹${Number(order.total_amount || 0).toLocaleString('en-IN')}`,
-              status: statusText,
-              statusType,
-              hasTrack,
-              image: firstItem?.product_image || '/lamborghini.jpg',
-              steps,
-              progressWidth,
-              lineColor,
-            };
-          });
-          if (isMounted) setOrdersList(mapped);
-        }
-      } catch (err) {
-        console.error('Failed to load orders from API:', err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchOrders();
-    return () => { isMounted = false; };
-  }, [currentUser]);
-
-  // Dynamic order stats computed from real orders
-  const totalOrdersCount = ordersList.length;
-  const inTransitCount = ordersList.filter(o => ['processing', 'shipped'].includes(o.statusType)).length;
-  const deliveredCount = ordersList.filter(o => o.statusType === 'delivered').length;
-  const cancelledCount = ordersList.filter(o => o.statusType === 'cancelled').length;
-
   // Filtered orders list matching search and dropdown filters
   const orders = ordersList.filter((order) => {
     if (filterStatus === 'In Transit' && !['processing', 'shipped'].includes(order.statusType)) return false;
@@ -305,6 +126,10 @@ export default function MyOrder() {
     }
     return true;
   });
+
+  const ordersPerPage = 4;
+  const totalPages = Math.max(1, Math.ceil(orders.length / ordersPerPage));
+  const paginatedOrders = orders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage);
 
   const handleLogout = () => {
     logout();
@@ -536,7 +361,18 @@ export default function MyOrder() {
 
             {/* Orders List Container */}
             <div className="space-y-3 sm:space-y-4">
-              {orders.map((order) => (
+              {loading && (
+                <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center text-sm text-slate-500">
+                  Loading your orders…
+                </div>
+              )}
+              {!loading && paginatedOrders.length === 0 && (
+                <div className="bg-white rounded-3xl p-8 border border-slate-100 text-center">
+                  <p className="font-black text-slate-800">No orders yet</p>
+                  <p className="text-xs text-slate-500 mt-1">Orders you place on the store will show up here.</p>
+                </div>
+              )}
+              {paginatedOrders.map((order) => (
                 <div
                   key={order.id}
                   onClick={() => navigate(`/account/orders/${order.rawId || order.id}`)}
@@ -560,7 +396,7 @@ export default function MyOrder() {
                           #{order.id}
                         </h3>
                         <p className="text-[11px] sm:text-xs text-slate-400 font-semibold mt-0.5">
-                          {order.date} <span className="mx-1">•</span> {order.itemsCount}
+                          {order.date}{order.time ? ` at ${order.time}` : ""} <span className="mx-1">•</span> {order.itemsCount}
                         </p>
                         
                         <div className="mt-1.5 flex items-center gap-2">
@@ -644,33 +480,44 @@ export default function MyOrder() {
             </div>
 
             {/* Desktop Pagination */}
-            <div className="hidden sm:flex items-center justify-center gap-2 pt-4">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                className="w-8 h-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-white transition-colors"
-              >
-                &larr;
-              </button>
-              {[1, 2, 3, 4, 5].map((page) => (
-                <button
-                  key={page}
-                  onClick={() => setCurrentPage(page)}
-                  className={`w-8 h-8 rounded-xl text-xs font-bold transition-colors ${
-                    currentPage === page
-                      ? 'bg-[#2563EB] text-white shadow-xs'
-                      : 'border border-slate-200 text-slate-600 hover:bg-white'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-              <button
-                onClick={() => setCurrentPage(Math.min(5, currentPage + 1))}
-                className="w-8 h-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-white transition-colors"
-              >
-                &rarr;
-              </button>
-            </div>
+            {totalPages > 1 && (
+              <div className="hidden sm:flex items-center justify-between pt-4 border-t border-slate-100">
+                <p className="text-xs text-slate-500 font-medium">
+                  Showing {(currentPage - 1) * ordersPerPage + 1}–{Math.min(currentPage * ordersPerPage, orders.length)} of {orders.length} orders
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    className="w-8 h-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Previous page"
+                  >
+                    &larr;
+                  </button>
+                  {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-colors ${
+                        currentPage === page
+                          ? 'bg-[#2563EB] text-white shadow-xs'
+                          : 'border border-slate-200 text-slate-600 hover:bg-white'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    className="w-8 h-8 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Next page"
+                  >
+                    &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
 
           </main>
         </div>

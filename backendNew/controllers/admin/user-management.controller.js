@@ -1,12 +1,10 @@
-import { prisma } from "../../config/prisma.js";
-import ErrorWithStatus from "../../config/ErrorWithStatus.js";
-import { HTTP_RES } from "../../utils/CONSTANTS.js";
-import { getAllUsersService } from "../../services/admin/user-management.service.js";
+import {
+    getAllUsersService,
+    getUserByIdService,
+    toggleUserStateService,
+} from "../../services/admin/user-management.service.js";
 import { logger } from "../../utils/logger.js";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET ALL USERS  — GET /api/admin/users
-// ─────────────────────────────────────────────────────────────────────────────
 export const getAllUsers = async (req, res, next) => {
     try {
         const result = await getAllUsersService(req.query);
@@ -17,45 +15,13 @@ export const getAllUsers = async (req, res, next) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET USER BY ID  — GET /api/admin/users/:id
-// ─────────────────────────────────────────────────────────────────────────────
 export const getUsersById = async (req, res, next) => {
     try {
-        const { id } = req.params;
-
-        const user = await prisma.user.findUnique({
-            where: { id },
-            select: {
-                id:         true,
-                first_name: true,
-                last_name:  true,
-                email:      true,
-                phone:      true,
-                role:       true,
-                active:     true,
-                gender:     true,
-                avatar_url: true,
-                is_verified: true,
-                referral_id: true,
-                last_login: true,
-                createdAt:  true,
-                updatedAt:  true,
-            },
-        });
-
-        if (!user) {
-            throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
-        }
-
-        const totalOrders = await prisma.order.count({
-            where: { user_id: user.id, deletedAt: null },
-        });
-
+        const data = await getUserByIdService(req.params.id);
         return res.status(200).json({
             success: true,
             message: "User details retrieved successfully",
-            data:    { ...user, totalOrders },
+            data,
         });
     } catch (error) {
         logger.error("Admin getUserById failed:", error.message);
@@ -63,30 +29,13 @@ export const getUsersById = async (req, res, next) => {
     }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TOGGLE USER STATUS  — PATCH /api/admin/users/:id/toggle
-// ─────────────────────────────────────────────────────────────────────────────
 export const toggleUserState = async (req, res, next) => {
     try {
-        const { id } = req.params;
-
-        const user = await prisma.user.findUnique({
-            where: { id },
-            select: { id: true, active: true },
-        });
-
-        if (!user) {
-            throw new ErrorWithStatus("User not found", HTTP_RES.NOT_FOUND);
-        }
-
-        await prisma.user.update({
-            where: { id },
-            data:  { active: !user.active },
-        });
-
+        const result = await toggleUserStateService(req.params.id);
         return res.status(200).json({
             success: true,
-            message: `User ${user.active ? "blocked" : "activated"} successfully`,
+            message: result.message,
+            data:    { id: result.id, active: result.active },
         });
     } catch (error) {
         logger.error("Admin toggleUserState failed:", error.message);

@@ -10,16 +10,17 @@ export const dashboardController = async (req, res, next) => {
             ? req.query.type
             : "daily";
 
-        const [summary, chartData, topData] = await Promise.all([
+        const [summary, chartData, topData, customerSnapshot] = await Promise.all([
             AdminDashboardService.getSummary(),
             AdminDashboardService.getChartData(chartType),
             AdminDashboardService.topThreeData(),
+            AdminDashboardService.getCustomerSnapshot(),
         ]);
 
         return res.status(HTTP_RES.OK).json({
             success: true,
             message: "Dashboard data retrieved successfully",
-            data: { summary, chartData, topData },
+            data: { summary, chartData, topData, ...customerSnapshot },
         });
     } catch (error) {
         next(error);

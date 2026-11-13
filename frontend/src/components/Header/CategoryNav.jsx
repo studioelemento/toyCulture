@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, ChevronDown, ChevronRight } from 'lucide-react';
-import { categories } from '../../data/categories';
+import { Menu, ChevronDown } from 'lucide-react';
 
 export const CategoryNav = () => {
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
-  const [activeSubMenu, setActiveSubMenu] = useState(null);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          setCategories(data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to load categories:', err));
+  }, []);
 
   return (
     <div className="hidden lg:block bg-toyNavy border-t border-gray-800 text-white relative z-30">
@@ -26,44 +36,26 @@ export const CategoryNav = () => {
             {/* Categories Dropdown Menu */}
             {isCategoryMenuOpen && (
               <div
-                onMouseLeave={() => {
-                  setIsCategoryMenuOpen(false);
-                  setActiveSubMenu(null);
-                }}
+                onMouseLeave={() => setIsCategoryMenuOpen(false)}
                 className="absolute top-full left-0 w-64 bg-white text-toyText-primary shadow-2xl rounded-b-md border border-gray-100 py-2 z-50 animate-fadeIn"
               >
-                {categories.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="relative group"
-                    onMouseEnter={() => setActiveSubMenu(cat.id)}
-                  >
+                {categories.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-gray-400">Loading categories...</div>
+                ) : (
+                  categories.map((cat) => (
                     <Link
-                      to={`/category/${cat.slug}`}
+                      key={cat.id}
+                      to={`/shop?category=${encodeURIComponent(cat.name)}`}
                       className="flex items-center justify-between px-4 py-2.5 text-xs font-semibold hover:bg-toyBg hover:text-toyOrange transition-colors"
                       onClick={() => setIsCategoryMenuOpen(false)}
                     >
                       <span>{cat.name}</span>
-                      {cat.subcategories && <ChevronRight size={14} className="text-gray-400" />}
+                      {cat.productCount > 0 && (
+                        <span className="text-[10px] text-gray-400">({cat.productCount})</span>
+                      )}
                     </Link>
-
-                    {/* Subcategories Flyout Menu */}
-                    {cat.subcategories && activeSubMenu === cat.id && (
-                      <div className="absolute top-0 left-full w-56 bg-white text-toyText-primary shadow-xl rounded-md border border-gray-100 py-2 ml-1 z-50">
-                        {cat.subcategories.map((sub, idx) => (
-                          <Link
-                            key={idx}
-                            to={`/category/${sub.slug}`}
-                            className="block px-4 py-2 text-xs font-medium hover:bg-toyBg hover:text-toyOrange transition-colors"
-                            onClick={() => setIsCategoryMenuOpen(false)}
-                          >
-                            {sub.name}
-                          </Link>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
           </div>
@@ -81,21 +73,18 @@ export const CategoryNav = () => {
             Shop By Age
           </Link>
           <Link
-            to="/shop-by-category"
+            to="/shop"
             className="text-xs font-bold uppercase tracking-wider hover:text-toyOrange transition-colors py-3"
           >
             Categories
           </Link>
         </div>
 
-        {/* Affiliate Program Button */}
+        {/* Live Shop Indicator */}
         <div>
-          <Link
-            to="/affiliate-registration"
-            className="border-2 border-toyOrange text-toyOrange hover:bg-toyOrange hover:text-white text-xs font-bold px-4 py-1.5 rounded-full transition-all inline-block"
-          >
-            Affiliate Program
-          </Link>
+          <span className="text-xs font-semibold text-toyOrange uppercase tracking-wider">
+            100% Genuine Toys
+          </span>
         </div>
       </div>
     </div>

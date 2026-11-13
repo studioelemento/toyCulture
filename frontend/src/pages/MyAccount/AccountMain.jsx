@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,21 +17,56 @@ import {
   Gift
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, extractList, formatAddress, mapStoreOrder } from '../../lib/accountHelpers';
 
 export default function AccountMain() {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const displayFirstName = displayName.split(' ')[0] || 'Anand';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, displayFirstName, initials } = accountIdentity(currentUser);
+  const [orders, setOrders] = useState([]);
+  const [wishlistCount, setWishlistCount] = useState(0);
+  const [couponCount, setCouponCount] = useState(0);
+  const [addresses, setAddresses] = useState([]);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const [orderRes, wishRes, couponRes, addrRes, catRes] = await Promise.all([
+          api.get('/api/order?limit=50').catch(() => ({ data: [] })),
+          api.get('/api/wishlist').catch(() => ({ data: [] })),
+          api.get('/api/account/coupons').catch(() => ({ data: [] })),
+          api.get('/api/account/address').catch(() => ({ data: [] })),
+          api.get('/api/categories').catch(() => ({ data: [] })),
+        ]);
+        if (!alive) return;
+        setOrders(extractList(orderRes).map(mapStoreOrder));
+        const wishItems = extractList(wishRes);
+        setWishlistCount(wishItems.length);
+        setCouponCount(extractList(couponRes).length);
+        setAddresses(extractList(addrRes).map(formatAddress).filter(Boolean));
+        setCategories(extractList(catRes).filter((c) => !c.parent_id).slice(0, 6));
+      } catch {
+        if (alive) {
+          setOrders([]);
+          setWishlistCount(0);
+          setCouponCount(0);
+          setAddresses([]);
+          setCategories([]);
+        }
+      }
+    };
+    load();
+    return () => { alive = false; };
+  }, [currentUser]);
+
+  const inTransitCount = orders.filter((o) => ['processing', 'shipped'].includes(o.statusType)).length;
+  const recentOrder = orders[0] || null;
+  const primaryAddress = addresses.find((a) => a.isDefault) || addresses[0] || null;
 
   // Desktop navigation items
   const navItems = [
@@ -107,7 +142,7 @@ export default function AccountMain() {
     {
       title: 'Orders',
       desktopTitle: 'Total Orders',
-      count: '12',
+      count: String(orders.length),
       linkText: 'View Orders',
       action: () => navigate('/account/orders'),
       icon: Package,
@@ -120,7 +155,7 @@ export default function AccountMain() {
     {
       title: 'In Transit',
       desktopTitle: 'In Transit',
-      count: '1',
+      count: String(inTransitCount),
       linkText: 'Track Order',
       action: () => navigate('/account/orders'),
       icon: Truck,
@@ -133,7 +168,7 @@ export default function AccountMain() {
     {
       title: 'Wishlist',
       desktopTitle: 'Wishlist Items',
-      count: '6',
+      count: String(wishlistCount),
       linkText: 'View Wishlist',
       action: () => navigate('/account/wishlist'),
       icon: Heart,
@@ -146,7 +181,7 @@ export default function AccountMain() {
     {
       title: 'Available Offers',
       desktopTitle: 'Available Offers',
-      count: '3',
+      count: String(couponCount),
       linkText: 'View Offers',
       action: () => navigate('/account/coupons'),
       icon: Gift,
@@ -159,51 +194,12 @@ export default function AccountMain() {
     },
   ];
 
-  // Category browse items
-  const categoriesList = [
-    {
-      name: 'Die-cast Vehicles',
-      count: '120+ Products',
-      slug: 'diecast-toys',
-      img: '/lamborghini.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/12/4.png'
-    },
-    {
-      name: 'Building Blocks',
-      count: '200+ Products',
-      slug: 'construction-toys-for-kids',
-      img: '/lego.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp'
-    },
-    {
-      name: 'Soft Toys',
-      count: '150+ Products',
-      slug: 'role-play-toys',
-      img: '/teddy.jpg',
-      fallback: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?w=300&auto=format&fit=crop&q=80'
-    },
-    {
-      name: 'Remote Control',
-      count: '90+ Products',
-      slug: 'activity-toys-for-kids',
-      img: '/nerf.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif'
-    },
-    {
-      name: 'Puzzles & Games',
-      count: '180+ Products',
-      slug: 'puzzles',
-      img: '/marble.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/09/Puzzles-Category-images.avif'
-    },
-    {
-      name: 'Arts & Crafts',
-      count: '110+ Products',
-      slug: 'art-and-craft-for-kids',
-      img: '/playdoh.jpg',
-      fallback: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp'
-    },
-  ];
+  const categoriesList = categories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    count: `${cat.productCount ?? 0} products`,
+    slug: cat.id,
+  }));
 
   const handleLogout = () => {
     logout();
@@ -372,110 +368,92 @@ export default function AccountMain() {
                 </Link>
               </div>
 
-              {/* Order Item Details */}
-              <div
-                onClick={() => navigate('/account/orders')}
-                className="mt-4 sm:mt-5 flex items-center justify-between gap-3 cursor-pointer group"
-              >
-                <div className="flex items-center gap-3 sm:gap-4 flex-1">
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-50 border border-slate-100 p-1.5 sm:p-2 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-200 transition-colors">
-                    <img
-                      src="/lamborghini.jpg"
-                      alt="Maisto Lamborghini Huracán LP 610-4"
-                      className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Maisto
-                    </span>
-                    <h4 className="text-xs sm:text-sm font-black text-slate-800 leading-snug group-hover:text-[#4F46E5] transition-colors">
-                      Lamborghini Huracán LP 610-4
-                    </h4>
-                    <p className="hidden sm:block text-[11px] text-slate-400 font-semibold mt-0.5">
-                      Scale 1:18 | Die-cast Metal
-                    </p>
-                    <div className="flex items-center gap-2 mt-1.5 sm:mt-2">
-                      <span className="text-sm sm:text-base font-black text-slate-900">
-                        ₹2,399
-                      </span>
-                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
-                        Shipped
-                      </span>
-                    </div>
-                  </div>
+              {!recentOrder ? (
+                <div className="mt-5 py-6 text-center">
+                  <p className="text-sm font-bold text-slate-700">No orders yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Your latest order will appear here after checkout.</p>
                 </div>
-
-                {/* Mobile Right Chevron Arrow */}
-                <div className="sm:hidden text-slate-400">
-                  <ChevronRight size={20} />
-                </div>
-
-                {/* Desktop Action Buttons */}
-                <div className="hidden sm:flex sm:flex-col gap-2 w-auto" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => navigate('/account/orders')}
-                    className="text-xs font-bold text-[#4F46E5] border border-[#C7D2FE] hover:bg-[#EEF2FF] px-4 py-2 rounded-xl transition-colors text-center"
+              ) : (
+                <>
+                  <div
+                    onClick={() => navigate(`/account/orders/${recentOrder.rawId || recentOrder.id}`)}
+                    className="mt-4 sm:mt-5 flex items-center justify-between gap-3 cursor-pointer group"
                   >
-                    Track Order
-                  </button>
-                  <button
-                    onClick={() => navigate('/account/orders')}
-                    className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition-colors text-center"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-
-              {/* Order Progress Stepper matching mobile design */}
-              <div className="mt-6 sm:mt-8 pt-3 sm:pt-4 border-t border-slate-50 sm:border-none">
-                <div className="relative flex items-center justify-between">
-                  {/* Progress Line */}
-                  <div className="absolute top-2 sm:top-2.5 left-4 right-4 h-0.5 bg-slate-200/80 -z-0">
-                    <div className="h-full bg-emerald-500 w-[66%]"></div>
-                  </div>
-
-                  {/* Step 1 */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[8px] sm:text-[10px] font-bold">
-                      ✓
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-50 border border-slate-100 p-1.5 sm:p-2 flex items-center justify-center flex-shrink-0 group-hover:border-indigo-200 transition-colors">
+                        {recentOrder.image ? (
+                          <img
+                            src={recentOrder.image}
+                            alt={recentOrder.title}
+                            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
+                          />
+                        ) : (
+                          <Package className="w-8 h-8 text-slate-300" />
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                          {recentOrder.id}
+                        </span>
+                        <h4 className="text-xs sm:text-sm font-black text-slate-800 leading-snug group-hover:text-[#4F46E5] transition-colors">
+                          {recentOrder.title}
+                        </h4>
+                        <p className="hidden sm:block text-[11px] text-slate-400 font-semibold mt-0.5">
+                          {recentOrder.date} · {recentOrder.itemsCount}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5 sm:mt-2">
+                          <span className="text-sm sm:text-base font-black text-slate-900">
+                            {recentOrder.amount}
+                          </span>
+                          <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+                            {recentOrder.status}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-bold text-slate-700 mt-1.5 sm:mt-2">
-                      Placed
-                    </span>
-                    <span className="text-[8px] sm:text-[9px] text-slate-400">18 Oct</span>
-                  </div>
 
-                  {/* Step 2 */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[8px] sm:text-[10px] font-bold">
-                      ✓
+                    <div className="sm:hidden text-slate-400">
+                      <ChevronRight size={20} />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-700 mt-1.5 sm:mt-2">
-                      Shipped
-                    </span>
-                    <span className="text-[8px] sm:text-[9px] text-slate-400">20 Oct</span>
+
+                    <div className="hidden sm:flex sm:flex-col gap-2 w-auto" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={() => navigate(`/account/orders/${recentOrder.rawId || recentOrder.id}`)}
+                        className="text-xs font-bold text-[#4F46E5] border border-[#C7D2FE] hover:bg-[#EEF2FF] px-4 py-2 rounded-xl transition-colors text-center"
+                      >
+                        Track Order
+                      </button>
+                      <button
+                        onClick={() => navigate(`/account/orders/${recentOrder.rawId || recentOrder.id}`)}
+                        className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition-colors text-center"
+                      >
+                        View Details
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Step 3 */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-emerald-500 bg-white"></div>
-                    <span className="text-[10px] font-semibold text-slate-700 mt-1.5 sm:mt-2">
-                      Out for Delivery
-                    </span>
-                    <span className="text-[8px] sm:text-[9px] text-slate-400">21 Oct</span>
+                  <div className="mt-6 sm:mt-8 pt-3 sm:pt-4 border-t border-slate-50 sm:border-none">
+                    <div className="relative flex items-center justify-between">
+                      <div className="absolute top-2 sm:top-2.5 left-4 right-4 h-0.5 bg-slate-200/80 -z-0">
+                        <div className={`h-full ${recentOrder.lineColor}`} style={{ width: recentOrder.progressWidth }}></div>
+                      </div>
+                      {recentOrder.steps.map((step) => (
+                        <div key={step.label} className="relative z-10 flex flex-col items-center text-center">
+                          <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center text-[8px] sm:text-[10px] font-bold ${
+                            step.done ? 'bg-emerald-500 text-white' : 'border-2 border-slate-300 bg-white'
+                          }`}>
+                            {step.done ? '✓' : ''}
+                          </div>
+                          <span className={`text-[10px] font-bold mt-1.5 sm:mt-2 ${step.done ? 'text-slate-700' : 'text-slate-400'}`}>
+                            {step.label}
+                          </span>
+                          <span className="text-[8px] sm:text-[9px] text-slate-400">{step.date}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-
-                  {/* Step 4 */}
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 border-slate-300 bg-white"></div>
-                    <span className="text-[10px] font-semibold text-slate-400 mt-1.5 sm:mt-2">
-                      Delivered
-                    </span>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
             {/* ================= MOBILE VIEW NAVIGATION MENU LIST ================= */}
@@ -536,6 +514,7 @@ export default function AccountMain() {
                     </button>
                   </div>
 
+                  {primaryAddress ? (
                   <div
                     onClick={() => navigate('/account/addresses')}
                     className="mt-5 p-4 rounded-2xl bg-slate-50/70 border border-slate-100 hover:border-indigo-200 transition-colors cursor-pointer group"
@@ -547,11 +526,13 @@ export default function AccountMain() {
                         </div>
                         <div>
                           <span className="text-xs font-black text-slate-800 mr-2 group-hover:text-[#4F46E5] transition-colors">
-                            Home
+                            {primaryAddress.type}
                           </span>
-                          <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
-                            Default
-                          </span>
+                          {primaryAddress.isDefault && (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -566,13 +547,16 @@ export default function AccountMain() {
                     </div>
 
                     <div className="mt-3 text-xs text-slate-600 space-y-0.5 pl-10 font-medium">
-                      <p className="font-bold text-slate-800">{displayName}</p>
-                      <p>TC 12/345, Main Road</p>
-                      <p>Kumarapuram</p>
-                      <p>Thiruvananthapuram, Kerala</p>
-                      <p className="font-bold text-slate-700">695001</p>
+                      <p className="font-bold text-slate-800">{primaryAddress.name || displayName}</p>
+                      <p>{primaryAddress.line1}</p>
+                      {primaryAddress.line2 ? <p>{primaryAddress.line2}</p> : null}
+                      <p>{[primaryAddress.city, primaryAddress.state].filter(Boolean).join(', ')}</p>
+                      {primaryAddress.pincode ? <p className="font-bold text-slate-700">{primaryAddress.pincode}</p> : null}
                     </div>
                   </div>
+                  ) : (
+                    <p className="mt-5 text-xs text-slate-500 font-medium">No saved address yet. Add one to speed up checkout.</p>
+                  )}
                 </div>
 
                 <button
@@ -606,22 +590,17 @@ export default function AccountMain() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5 mt-4">
-                {categoriesList.map((cat, idx) => (
+                {categoriesList.length === 0 && (
+                  <p className="col-span-full text-xs text-slate-500">No categories available yet.</p>
+                )}
+                {categoriesList.map((cat) => (
                   <Link
-                    key={idx}
+                    key={cat.id}
                     to={`/category/${cat.slug}`}
                     className="flex flex-col items-center p-3 rounded-2xl border border-slate-100 bg-[#FAFAFC] hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all duration-200 group text-center"
                   >
                     <div className="w-20 h-20 rounded-2xl bg-white border border-slate-100 shadow-xs flex items-center justify-center overflow-hidden mb-2.5 p-1 group-hover:scale-105 transition-transform">
-                      <img
-                        src={cat.img}
-                        alt={cat.name}
-                        className="max-h-full max-w-full object-contain"
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = cat.fallback;
-                        }}
-                      />
+                      <span className="text-lg font-black text-indigo-500">{cat.name?.charAt(0) || 'T'}</span>
                     </div>
                     <span className="text-xs font-bold text-slate-800 group-hover:text-[#4F46E5] transition-colors leading-tight">
                       {cat.name}

@@ -13,10 +13,30 @@ import {
   ArrowRight,
   PackageOpen
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { requireLoginForPurchase } from '../../lib/requireLoginAction';
 
 const CartPage = () => {
-  const { cart, removeFromCart, updateQuantity, subtotal, shippingFee, grandTotal } = useCart();
+  const navigate = useNavigate();
+  const { cart, removeFromCart, updateQuantity, subtotal, shippingFee, grandTotal, showToast } = useCart();
+  const { isLoggedIn, isBootstrapping, openAuthDrawer } = useAuth();
+
+  const handleProceedCheckout = (e) => {
+    e.preventDefault();
+    if (
+      !requireLoginForPurchase({
+        isLoggedIn,
+        isBootstrapping,
+        openAuthDrawer,
+        showToast,
+      })
+    ) {
+      return;
+    }
+    navigate('/checkout');
+  };
 
   const suggestedProducts = [
     {
@@ -279,11 +299,15 @@ const CartPage = () => {
               </div>
 
               {cart.length > 0 ? (
-                <Link to="/checkout" className="w-full bg-[#ff5a00] hover:bg-[#e65200] text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all mb-8 shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] hover:shadow-[0_6px_20px_rgba(255,90,0,0.23)] hover:-translate-y-0.5">
+                <button
+                  type="button"
+                  onClick={handleProceedCheckout}
+                  className="w-full bg-[#ff5a00] hover:bg-[#e65200] text-white font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 transition-all mb-8 shadow-[0_4px_14px_0_rgba(255,90,0,0.39)] hover:shadow-[0_6px_20px_rgba(255,90,0,0.23)] hover:-translate-y-0.5"
+                >
                   <ShoppingCart className="w-5 h-5" />
                   Proceed to Checkout
                   <ArrowRight className="w-5 h-5 ml-1" />
-                </Link>
+                </button>
               ) : (
                 <button disabled className="w-full bg-gray-200 text-gray-400 font-bold py-4 px-4 rounded-xl flex items-center justify-center gap-2 mb-8 cursor-not-allowed">
                   <ShoppingCart className="w-5 h-5" />

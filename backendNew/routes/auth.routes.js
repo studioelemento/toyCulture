@@ -15,6 +15,7 @@ router.post('/otp/resend', resendOTP)
 router.patch('/password/reset', resetPassword)
 
 router.get('/me', getUserDetails)
-router.get('/google',googleAuth)
+router.get('/google', googleAuth)
+router.post('/google', googleAuth)
 
 export default router

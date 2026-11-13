@@ -1,101 +1,46 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, FolderTree } from 'lucide-react';
 
-export const categoriesData = [
-  {
-    id: 'diecast-toys',
-    title: 'Diecast Toys',
-    slug: 'diecast-toys',
-    image: 'https://images.unsplash.com/photo-1594787318286-3d835c1d207f?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/12/4.png',
-    bgColor: 'bg-[#FDF0F0]',
-    borderColor: 'border-[#FADCDC]',
-  },
-  {
-    id: 'construction-toys',
-    title: 'Construction Toys',
-    slug: 'construction-toys-for-kids',
-    image: 'https://images.unsplash.com/photo-1587654780291-39c9404d746b?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/construction_toys_category-1.webp',
-    bgColor: 'bg-[#EDF7FC]',
-    borderColor: 'border-[#D6ECFA]',
-  },
-  {
-    id: 'puzzles',
-    title: 'Puzzles',
-    slug: 'puzzles',
-    image: 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Puzzles-Category-images.avif',
-    bgColor: 'bg-[#FDF8EE]',
-    borderColor: 'border-[#FBEECF]',
-  },
-  {
-    id: 'role-play-toys',
-    title: 'Role Play Toys',
-    slug: 'role-play-toys',
-    image: 'https://images.unsplash.com/photo-1596464716127-f2a82984de30?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
-    bgColor: 'bg-[#FCF1EE]',
-    borderColor: 'border-[#FADCD4]',
-  },
-  {
-    id: 'stem-diy',
-    title: 'STEM & DIY',
-    slug: 'diy-toys',
-    image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp',
-    bgColor: 'bg-[#EEF8F3]',
-    borderColor: 'border-[#D2EFE0]',
-  },
-  {
-    id: 'arts-crafts',
-    title: 'Arts & Crafts',
-    slug: 'art-and-craft-for-kids',
-    image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/do_it_yourself_category-1.webp',
-    bgColor: 'bg-[#F2EFFC]',
-    borderColor: 'border-[#E1DAF9]',
-  },
-  {
-    id: 'activity-toys',
-    title: 'Activity Toys',
-    slug: 'activity-toys-for-kids',
-    image: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif',
-    bgColor: 'bg-[#FDF6EB]',
-    borderColor: 'border-[#FBE8C8]',
-  },
-  {
-    id: 'outdoor-sports',
-    title: 'Outdoor & Sports',
-    slug: 'outdoor-sports',
-    image: 'https://images.unsplash.com/photo-1614632537423-1e6c2e7e0aab?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif',
-    bgColor: 'bg-[#EDF7F4]',
-    borderColor: 'border-[#D1EFE7]',
-  },
-  {
-    id: 'baby-toys',
-    title: 'Baby Toys',
-    slug: 'baby-toddler-toys',
-    image: 'https://images.unsplash.com/photo-1559454403-b8fb88521f11?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/role_play_toys_category-1.webp',
-    bgColor: 'bg-[#EDF4FC]',
-    borderColor: 'border-[#D4E7F9]',
-  },
-  {
-    id: 'games-more',
-    title: 'Games & More',
-    slug: 'board-games-for-kids',
-    image: 'https://images.unsplash.com/photo-1610890716171-6b1bb98ffd09?auto=format&fit=crop&w=500&q=80',
-    fallbackImg: 'https://toyculture.in/wp-content/uploads/2025/09/Activity-toys-category-images.avif',
-    bgColor: 'bg-[#FDF0EE]',
-    borderColor: 'border-[#FBD9D4]',
-  },
+const COLOR_PALETTES = [
+  { bgColor: 'bg-[#FDF0F0]', borderColor: 'border-[#FADCDC]' },
+  { bgColor: 'bg-[#EDF7FC]', borderColor: 'border-[#D6ECFA]' },
+  { bgColor: 'bg-[#FDF8EE]', borderColor: 'border-[#FBEECF]' },
+  { bgColor: 'bg-[#FCF1EE]', borderColor: 'border-[#FADCD4]' },
+  { bgColor: 'bg-[#EEF8F3]', borderColor: 'border-[#D2EFE0]' },
+  { bgColor: 'bg-[#F2EFFC]', borderColor: 'border-[#E1DAF9]' },
+  { bgColor: 'bg-[#FDF6EB]', borderColor: 'border-[#FBE8C8]' },
+  { bgColor: 'bg-[#EDF7F4]', borderColor: 'border-[#D1EFE7]' },
+  { bgColor: 'bg-[#EDF4FC]', borderColor: 'border-[#D4E7F9]' },
+  { bgColor: 'bg-[#FDF0EE]', borderColor: 'border-[#FBD9D4]' },
 ];
 
 export const ShopbyCategory = () => {
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
+          const formatted = data.data.map((c, idx) => {
+            const palette = COLOR_PALETTES[idx % COLOR_PALETTES.length];
+            return {
+              id: c.id,
+              title: c.name,
+              productCount: c.productCount || 0,
+              bgColor: palette.bgColor,
+              borderColor: palette.borderColor,
+            };
+          });
+          setCategories(formatted);
+        }
+      })
+      .catch((err) => console.error('Error fetching categories:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <section className="w-full bg-[#FAF9F5] py-8 sm:py-10 md:py-14">
       <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12">
@@ -112,7 +57,7 @@ export const ShopbyCategory = () => {
           </div>
 
           <Link
-            to="/shop-by-category"
+            to="/shop"
             className="text-xs sm:text-sm md:text-[15px] font-bold text-[#F96515] hover:text-[#EA580C] transition-colors flex items-center gap-1 sm:gap-1.5 flex-shrink-0 cursor-pointer pb-1"
           >
             <span className="hidden sm:inline">View All Categories</span>
@@ -121,74 +66,75 @@ export const ShopbyCategory = () => {
           </Link>
         </div>
 
-        {/* Desktop Layout (1440px) - 2 rows x 5 columns grid */}
-        <div className="hidden md:grid grid-cols-5 gap-4 lg:gap-5">
-          {categoriesData.map((item) => (
-            <Link
-              key={item.id}
-              to={`/category/${item.slug}`}
-              className={`group ${item.bgColor} border ${item.borderColor} rounded-[28px] lg:rounded-[32px] p-4 lg:p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer`}
-            >
-              {/* Product Card Image Container */}
-              <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden mb-3 flex items-center justify-center bg-white/40 p-2">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500"
-                  onError={(e) => {
-                    if (item.fallbackImg) e.currentTarget.src = item.fallbackImg;
-                  }}
-                />
-              </div>
+        {/* Loading / Empty / Content states */}
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 lg:gap-5">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <div key={n} className="bg-white rounded-[28px] border border-[#ECEFF2] p-5 h-48 animate-pulse" />
+            ))}
+          </div>
+        ) : categories.length === 0 ? (
+          <div className="text-center py-12 text-gray-500 text-sm">
+            No categories found.
+          </div>
+        ) : (
+          <>
+            {/* Desktop Layout (1440px) */}
+            <div className="hidden md:grid grid-cols-5 gap-4 lg:gap-5">
+              {categories.map((item) => (
+                <Link
+                  key={item.id}
+                  to={`/shop?category=${encodeURIComponent(item.title)}`}
+                  className={`group ${item.bgColor} border ${item.borderColor} rounded-[28px] lg:rounded-[32px] p-5 flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:-translate-y-1 cursor-pointer min-h-[160px]`}
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-white/80 flex items-center justify-center text-[#F96515] shadow-xs group-hover:scale-110 transition-transform">
+                    <FolderTree className="w-6 h-6" />
+                  </div>
 
-              {/* Title & Circular Arrow Action */}
-              <div className="space-y-3 pt-1">
-                <h3 className="text-base lg:text-[17px] font-black text-[#0F243E] tracking-tight font-title leading-snug">
-                  {item.title}
-                </h3>
+                  {/* Title & Circular Arrow Action */}
+                  <div className="space-y-1 pt-3">
+                    <h3 className="text-base lg:text-[17px] font-black text-[#0F243E] tracking-tight font-title leading-snug">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      {item.productCount} {item.productCount === 1 ? 'product' : 'products'}
+                    </p>
 
-                {/* White Circle Arrow Action */}
-                <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full bg-white text-[#F96515] shadow-xs flex items-center justify-center group-hover:bg-[#F96515] group-hover:text-white transition-all duration-300">
-                  <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                    <div className="pt-2 flex justify-end">
+                      <div className="w-9 h-9 rounded-full bg-white text-[#F96515] shadow-xs flex items-center justify-center group-hover:bg-[#F96515] group-hover:text-white transition-all duration-300">
+                        <ArrowRight className="w-4 h-4" strokeWidth={2.5} />
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
 
-        {/* Mobile Layout (375px) - 2 columns x 5 rows grid matching reference mockup */}
-        <div className="grid grid-cols-2 gap-3 md:hidden">
-          {categoriesData.map((item) => (
-            <Link
-              key={item.id}
-              to={`/category/${item.slug}`}
-              className={`group ${item.bgColor} border ${item.borderColor} rounded-2xl p-3 flex flex-col justify-between transition-all active:scale-[0.99] cursor-pointer`}
-            >
-              {/* Product Card Image */}
-              <div className="w-full aspect-square rounded-xl overflow-hidden mb-2 flex items-center justify-center bg-white/40 p-1.5">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="w-full h-full object-contain mix-blend-multiply"
-                  onError={(e) => {
-                    if (item.fallbackImg) e.currentTarget.src = item.fallbackImg;
-                  }}
-                />
-              </div>
+            {/* Mobile Layout (375px) */}
+            <div className="grid grid-cols-2 gap-3 md:hidden">
+              {categories.map((item) => (
+                <Link
+                  key={item.id}
+                  to={`/shop?category=${encodeURIComponent(item.title)}`}
+                  className={`group ${item.bgColor} border ${item.borderColor} rounded-2xl p-4 flex flex-col justify-between transition-all active:scale-[0.99] cursor-pointer min-h-[130px]`}
+                >
+                  <div className="w-9 h-9 rounded-xl bg-white/80 flex items-center justify-center text-[#F96515] shadow-xs mb-2">
+                    <FolderTree className="w-4 h-4" />
+                  </div>
 
-              {/* Title & Arrow Action */}
-              <div className="flex items-center justify-between gap-1 pt-1">
-                <h3 className="text-[13px] font-black text-[#0F243E] tracking-tight font-title leading-tight line-clamp-1">
-                  {item.title}
-                </h3>
-
-                <div className="w-7 h-7 rounded-full bg-white text-[#F96515] shadow-xs flex items-center justify-center flex-shrink-0 group-hover:bg-[#F96515] group-hover:text-white transition-colors">
-                  <ArrowRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                  <div>
+                    <h3 className="text-[13px] font-black text-[#0F243E] tracking-tight font-title leading-tight line-clamp-1">
+                      {item.title}
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      {item.productCount} items
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
 
       </div>
     </section>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,6 +17,8 @@ import {
   Bell
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/apiClient';
+import { accountIdentity, extractList } from '../../lib/accountHelpers';
 
 export default function Coupons() {
   const { currentUser, logout } = useAuth();
@@ -26,14 +28,25 @@ export default function Coupons() {
     window.scrollTo(0, 0);
   }, []);
 
-  const displayName = currentUser?.name || 'Anand R V';
-  const displayEmail = currentUser?.email || 'anandrv@example.com';
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .map((n) => n[0].toUpperCase())
-    .slice(0, 2)
-    .join('') || 'AR';
+  const { displayName, displayEmail, initials } = accountIdentity(currentUser);
+  const [coupons, setCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const json = await api.get('/api/account/coupons');
+        if (alive) setCoupons(extractList(json));
+      } catch {
+        if (alive) setCoupons([]);
+      } finally {
+        if (alive) setLoadingCoupons(false);
+      }
+    };
+    load();
+    return () => { alive = false; };
+  }, [currentUser]);
 
   // Desktop sidebar navigation items
   const navItems = [
@@ -173,7 +186,28 @@ export default function Coupons() {
               </div>
             </div>
 
-            {/* Main Empty State Card */}
+            {!loadingCoupons && coupons.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {coupons.map((coupon) => (
+                  <div key={coupon.id || coupon.code} className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600">Active offer</p>
+                        <h3 className="text-lg font-black text-[#0B1B3D] mt-1">{coupon.code}</h3>
+                        <p className="text-xs text-slate-500 mt-1">{coupon.description || 'Use this coupon at checkout.'}</p>
+                      </div>
+                      <span className="text-sm font-black text-[#F96515]">
+                        {coupon.type === 'PERCENT' ? `${coupon.value}% OFF` : `₹${Number(coupon.value || 0).toLocaleString('en-IN')} OFF`}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-3">
+                      Min order ₹{Number(coupon.min_order_amount || 0).toLocaleString('en-IN')}
+                      {coupon.valid_until ? ` · Valid till ${new Date(coupon.valid_until).toLocaleDateString('en-IN')}` : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="bg-white rounded-3xl p-8 sm:p-14 border border-slate-100 shadow-sm flex flex-col items-center text-center">
               <div className="w-56 h-48 sm:w-64 sm:h-56 flex items-center justify-center overflow-hidden mb-2">
                 <img
@@ -184,7 +218,7 @@ export default function Coupons() {
               </div>
 
               <h2 className="text-xl sm:text-2xl font-black text-[#0B1B3D] tracking-tight mt-1">
-                No Coupons Available Right Now
+                {loadingCoupons ? 'Loading coupons…' : 'No Coupons Available Right Now'}
               </h2>
 
               <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mt-2 leading-relaxed">
@@ -202,6 +236,7 @@ export default function Coupons() {
                 <ArrowRight size={16} />
               </button>
             </div>
+            )}
 
             {/* Bottom Info Banner: How to get exclusive coupons? */}
             <div className="bg-[#F0F7FF] border border-[#BFDBFE]/60 rounded-3xl p-5 sm:p-7 space-y-4">

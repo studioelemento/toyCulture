@@ -1,13 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { X, Search, ChevronRight, User, LogOut } from 'lucide-react';
-import { categories } from '../../data/categories';
 import { useAuth } from '../../context/AuthContext';
 
 export const MobileNavDrawer = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState([]);
   const { currentUser, isLoggedIn, openAuthDrawer, logout } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/categories')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.data)) {
+            setCategories(data.data);
+          }
+        })
+        .catch((err) => console.error('Failed to load categories:', err));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -69,17 +82,24 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
           <div className="text-xs font-extrabold uppercase text-gray-400 mb-2 px-2">
             Categories
           </div>
-          {categories.map((cat) => (
-            <Link
-              key={cat.id}
-              to={`/category/${cat.slug}`}
-              onClick={onClose}
-              className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-toyOrange/10 hover:text-toyOrange transition-colors"
-            >
-              <span>{cat.name}</span>
-              <ChevronRight size={14} className="text-gray-400" />
-            </Link>
-          ))}
+          {categories.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-gray-400">Loading categories...</div>
+          ) : (
+            categories.map((cat) => (
+              <Link
+                key={cat.id}
+                to={`/shop?category=${encodeURIComponent(cat.name)}`}
+                onClick={onClose}
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold hover:bg-toyOrange/10 hover:text-toyOrange transition-colors"
+              >
+                <span>{cat.name}</span>
+                {cat.productCount > 0 && (
+                  <span className="text-[10px] text-gray-400">({cat.productCount})</span>
+                )}
+                <ChevronRight size={14} className="text-gray-400" />
+              </Link>
+            ))
+          )}
         </div>
 
         {/* Footer Account & Links */}
@@ -118,11 +138,11 @@ export const MobileNavDrawer = ({ isOpen, onClose }) => {
             </button>
           )}
           <Link
-            to="/affiliate-registration"
+            to="/shop"
             onClick={onClose}
-            className="block text-center text-xs font-bold text-toyOrange border border-toyOrange py-2 rounded-lg hover:bg-toyOrange hover:text-white transition-colors"
+            className="block text-center text-xs font-bold text-gray-600 hover:text-toyOrange transition-colors"
           >
-            Affiliate Program
+            All Toys Store
           </Link>
         </div>
       </div>

@@ -12,6 +12,7 @@ import {
   Loader2,
   Sparkles,
 } from "lucide-react";
+import { api, ApiError } from "../lib/apiClient";
 
 const emptyBrand = { name: "", seo_title: "", seo_description: "" };
 
@@ -28,8 +29,7 @@ export default function Brands() {
   const fetchBrands = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/brands?limit=100&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
+      const data = await api.get(`/api/admin/brands?limit=100&search=${encodeURIComponent(search)}`);
       setBrands(data.data || []);
     } catch {
       setMsg({ text: "Failed to fetch brands", type: "error" });
@@ -69,17 +69,10 @@ export default function Brands() {
     setSaving(true);
     setMsg({ text: "", type: "" });
     try {
-      const url = editingId
-        ? `/api/admin/brands/${editingId}`
-        : "/api/admin/brands";
-      const method = editingId ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const data = editingId
+        ? await api.put(`/api/admin/brands/${editingId}`, form)
+        : await api.post("/api/admin/brands", form);
+      if (data) {
         setMsg({
           text: editingId ? "Brand updated!" : "Brand created!",
           type: "success",
@@ -88,11 +81,9 @@ export default function Brands() {
         setForm(emptyBrand);
         setEditingId(null);
         fetchBrands();
-      } else {
-        setMsg({ text: data.message || "Failed", type: "error" });
       }
     } catch (err) {
-      setMsg({ text: err.message, type: "error" });
+      setMsg({ text: err instanceof ApiError ? err.message : err.message, type: "error" });
     } finally {
       setSaving(false);
     }
@@ -100,10 +91,8 @@ export default function Brands() {
 
   const toggleBrand = async (id) => {
     try {
-      const res = await fetch(`/api/admin/brands/toggle/${id}`, {
-        method: "PATCH",
-      });
-      if (res.ok) fetchBrands();
+      await api.patch(`/api/admin/brands/toggle/${id}`);
+      fetchBrands();
     } catch {}
   };
 

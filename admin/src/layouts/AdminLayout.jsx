@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../lib/apiClient";
 import {
   LayoutDashboard,
   Package,
@@ -16,21 +19,27 @@ import {
   Menu,
   X,
   Sparkles,
+  Star,
+  Users,
 } from "lucide-react";
 
 export default function AdminLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dbStatus, setDbStatus] = useState("checking");
 
   useEffect(() => {
-    fetch("/api/v1/products")
-      .then((res) => {
-        if (res.ok) setDbStatus("connected");
-        else setDbStatus("error");
-      })
+    api.get("/api/v1/products")
+      .then(() => setDbStatus("connected"))
       .catch(() => setDbStatus("error"));
   }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
 
   const navItems = [
     { label: "Dashboard", path: "/", icon: LayoutDashboard },
@@ -39,6 +48,8 @@ export default function AdminLayout() {
     { label: "Categories", path: "/categories", icon: FolderTree },
     { label: "Brands", path: "/brands", icon: Award },
     { label: "Orders", path: "/orders", icon: ShoppingBag },
+    { label: "Customers", path: "/customers", icon: Users },
+    { label: "Reviews", path: "/reviews", icon: Star },
   ];
 
   const isActive = (path) => {
@@ -222,14 +233,16 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link
-              to="/products/new"
-              className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-indigo-600/20 active:scale-95 transition-all"
+            {user?.email && (
+              <span className="hidden md:inline text-xs text-slate-500">{user.email}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-xs font-semibold text-slate-400 hover:text-white border border-slate-800 px-3 py-1.5 rounded-xl"
             >
-              <PlusCircle className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Product</span>
-            </Link>
-
+              Log out
+            </button>
             <a
               href="http://localhost:5173/shop"
               target="_blank"

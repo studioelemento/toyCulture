@@ -16,6 +16,7 @@ import {
   Sliders,
   Trash2,
 } from "lucide-react";
+import { api, ApiError } from "../lib/apiClient";
 
 const emptyCategory = { name: "", parent_id: "", seo_description: "", attributes: [] };
 
@@ -32,8 +33,7 @@ export default function Categories() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/categories?limit=100&search=${encodeURIComponent(search)}`);
-      const data = await res.json();
+      const data = await api.get(`/api/admin/categories?limit=100&search=${encodeURIComponent(search)}`);
       setCategories(data.data || []);
     } catch {
       setMsg({ text: "Failed to fetch categories", type: "error" });
@@ -77,10 +77,6 @@ export default function Categories() {
     setSaving(true);
     setMsg({ text: "", type: "" });
     try {
-      const url = editingId
-        ? `/api/admin/categories/${editingId}`
-        : "/api/admin/categories";
-      const method = editingId ? "PUT" : "POST";
       const payload = {
         ...form,
         parent_id: form.parent_id || null,
@@ -93,13 +89,10 @@ export default function Categories() {
             hint: a.hint ? a.hint.trim() : "",
           })),
       };
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const data = editingId
+        ? await api.put(`/api/admin/categories/${editingId}`, payload)
+        : await api.post("/api/admin/categories", payload);
+      if (data) {
         setMsg({
           text: editingId ? "Category updated!" : "Category created!",
           type: "success",
@@ -108,11 +101,9 @@ export default function Categories() {
         setForm(emptyCategory);
         setEditingId(null);
         fetchCategories();
-      } else {
-        setMsg({ text: data.message || "Failed", type: "error" });
       }
     } catch (err) {
-      setMsg({ text: err.message, type: "error" });
+      setMsg({ text: err instanceof ApiError ? err.message : err.message, type: "error" });
     } finally {
       setSaving(false);
     }
@@ -120,10 +111,8 @@ export default function Categories() {
 
   const toggleCategory = async (id) => {
     try {
-      const res = await fetch(`/api/admin/categories/toggle/${id}`, {
-        method: "PATCH",
-      });
-      if (res.ok) fetchCategories();
+      await api.patch(`/api/admin/categories/toggle/${id}`);
+      fetchCategories();
     } catch {}
   };
 
